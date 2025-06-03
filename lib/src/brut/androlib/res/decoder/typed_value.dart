@@ -1,4 +1,4 @@
-library android_util;
+library;
 
 // Minimal port of android.util.TypedValue constants used by AXmlResourceParser
 class TypedValue {

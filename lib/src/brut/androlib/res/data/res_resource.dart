@@ -1,4 +1,4 @@
-library brut_androlib_res_data;
+library;
 
 import 'res_type.dart';
 import 'res_res_spec.dart';

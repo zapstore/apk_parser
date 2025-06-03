@@ -1,4 +1,4 @@
-library brut_util;
+library;
 
 import 'dart:typed_data';
 

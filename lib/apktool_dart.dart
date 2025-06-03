@@ -1,4 +1,4 @@
-library apktool_dart;
+library;
 
 // Export main decoder class
 export 'src/brut/androlib/apk_decoder.dart' show ApkDecoder;

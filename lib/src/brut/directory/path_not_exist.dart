@@ -1,8 +1,7 @@
-library brut_directory;
+library;
 
 import 'directory_exception.dart';
 
 class PathNotExist extends DirectoryException {
-  PathNotExist([String message = "Path does not exist", Object? cause])
-    : super(message, cause);
+  PathNotExist([super.message = "Path does not exist", super.cause]);
 }

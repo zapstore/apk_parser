@@ -1,7 +1,7 @@
-library brut_directory;
+library;
 
 import 'dart:io' as dart_io;
-import 'package:path/path.dart' as p; // For path operations if needed
+// For path operations if needed
 
 import 'directory.dart';
 import 'directory_exception.dart';
@@ -11,7 +11,7 @@ import 'zip_ro_directory.dart';
 class ExtFile {
   final dart_io.File _file;
   Directory? _directory;
-  String _path;
+  final String _path;
 
   ExtFile(String path) : _path = path, _file = dart_io.File(path);
 

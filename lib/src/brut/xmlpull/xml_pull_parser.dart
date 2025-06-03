@@ -1,30 +1,27 @@
-library brut_xmlpull;
+library;
 
 import 'dart:async';
-import 'dart:typed_data';
-import '../directory/directory.dart'
-    show AbstractInputStream; // For setInput with InputStream
-import 'xml_pull_parser_exception.dart';
+// For setInput with InputStream
 
 // Ported from org.xmlpull.v1.XmlPullParser
 abstract class XmlPullParser {
-  static const String NO_NAMESPACE = "";
+  static const String? kNoNamespace = null;
 
-  // Event Types
-  static const int START_DOCUMENT = 0;
-  static const int END_DOCUMENT = 1;
-  static const int START_TAG = 2;
-  static const int END_TAG = 3;
-  static const int TEXT = 4;
-  // Additional events from nextToken()
-  static const int CDSECT = 5;
-  static const int ENTITY_REF = 6;
-  static const int IGNORABLE_WHITESPACE = 7;
-  static const int PROCESSING_INSTRUCTION = 8;
-  static const int COMMENT = 9;
-  static const int DOCDECL = 10;
+  // Event types returned by next() and getEventType()
+  static const int kStartDocument = 0;
+  static const int kEndDocument = 1;
+  static const int kStartTag = 2;
+  static const int kEndTag = 3;
+  static const int kText = 4;
 
-  static const List<String> TYPES = [
+  static const int kCdsect = 5;
+  static const int kEntityRef = 6;
+  static const int kIgnorableWhitespace = 7;
+  static const int kProcessingInstruction = 8;
+  static const int kComment = 9;
+  static const int kDocdecl = 10;
+
+  static const List<String> kTypes = [
     "START_DOCUMENT",
     "END_DOCUMENT",
     "START_TAG",
@@ -38,14 +35,14 @@ abstract class XmlPullParser {
     "DOCDECL",
   ];
 
-  // Features - String constants
-  static const String FEATURE_PROCESS_NAMESPACES =
+  // Features
+  static const String kFeatureProcessNamespaces =
       "http://xmlpull.org/v1/doc/features.html#process-namespaces";
-  static const String FEATURE_REPORT_NAMESPACE_ATTRIBUTES =
+  static const String kFeatureReportNamespaceAttributes =
       "http://xmlpull.org/v1/doc/features.html#report-namespace-prefixes";
-  static const String FEATURE_PROCESS_DOCDECL =
+  static const String kFeatureProcessDocdecl =
       "http://xmlpull.org/v1/doc/features.html#process-docdecl";
-  static const String FEATURE_VALIDATION =
+  static const String kFeatureValidation =
       "http://xmlpull.org/v1/doc/features.html#validation";
 
   // Methods

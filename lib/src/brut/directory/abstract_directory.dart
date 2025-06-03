@@ -1,4 +1,4 @@
-library brut_directory;
+library;
 
 import 'dart:async';
 import 'dart:collection'; // For LinkedHashMap, LinkedHashSet

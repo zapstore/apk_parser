@@ -1,12 +1,11 @@
-library brut_androlib_res_data;
+library;
 
-import 'res_table.dart';
+import 'res_type.dart';
+import 'res_config_flags.dart';
 import 'res_id.dart';
 import 'res_res_spec.dart';
-import 'res_config_flags.dart';
-import 'res_type.dart';
+import 'res_table.dart';
 import 'res_type_spec.dart';
-import 'value/res_value.dart';
 
 class ResPackage {
   final ResTable _resTable;
@@ -66,7 +65,8 @@ class ResPackage {
 
   void addType(ResTypeSpec type) {
     if (_types.containsKey(type.getName())) {
-      print('Warning: Multiple types detected! $type ignored!');
+      // print('Warning: Multiple types detected! $type ignored!');
+      return;
     } else {
       _types[type.getName()] = type;
     }

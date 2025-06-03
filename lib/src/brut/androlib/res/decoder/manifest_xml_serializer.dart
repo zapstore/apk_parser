@@ -1,7 +1,7 @@
-library brut_androlib_internal;
+library;
 
 import 'dart:async';
-import 'dart:convert'; // For htmlEscape if needed, though XmlElement handles it.
+// For htmlEscape if needed, though XmlElement handles it.
 
 import 'package:xml/xml.dart' as xml_pkg;
 import 'package:apktool_dart/src/brut/xmlpull/xml_pull_parser.dart';
@@ -25,7 +25,7 @@ class ManifestXmlSerializer {
     }
 
     // First event must be START_DOCUMENT
-    if (eventType == XmlPullParser.START_DOCUMENT) {
+    if (eventType == XmlPullParser.kStartDocument) {
       // The XmlDocument is implicitly created when we add the root element.
       // For now, we just advance past START_DOCUMENT.
       eventType = await _parser.next();
@@ -33,9 +33,9 @@ class ManifestXmlSerializer {
 
     xml_pkg.XmlElement? currentParent;
 
-    while (eventType != XmlPullParser.END_DOCUMENT) {
+    while (eventType != XmlPullParser.kEndDocument) {
       switch (eventType) {
-        case XmlPullParser.START_TAG:
+        case XmlPullParser.kStartTag:
           final attributes = <xml_pkg.XmlAttribute>[];
           final String? tagPrefix = _parser.getPrefix();
           final String tagName = _parser.getName() ?? "unknown";
@@ -102,14 +102,14 @@ class ManifestXmlSerializer {
           nodeStack.add(element);
           break;
 
-        case XmlPullParser.END_TAG:
+        case XmlPullParser.kEndTag:
           if (nodeStack.isNotEmpty) nodeStack.removeLast();
           currentParent = nodeStack.isNotEmpty
               ? nodeStack.last as xml_pkg.XmlElement
               : null;
           break;
 
-        case XmlPullParser.TEXT:
+        case XmlPullParser.kText:
           final String? text = _parser.getText();
           if (text != null && text.isNotEmpty) {
             // Add even if only whitespace, XML spec allows
@@ -117,7 +117,7 @@ class ManifestXmlSerializer {
           }
           break;
 
-        case XmlPullParser.CDSECT:
+        case XmlPullParser.kCdsect:
           final String? cdataText = _parser.getText();
           if (cdataText != null) {
             currentParent?.children.add(xml_pkg.XmlCDATA(cdataText));

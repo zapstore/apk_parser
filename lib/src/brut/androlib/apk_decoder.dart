@@ -1,27 +1,19 @@
-library brut_androlib;
+library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io' as dart_io;
-import 'dart:typed_data';
+import 'package:path/path.dart' as p;
 
 import '../directory/directory.dart';
 import '../directory/ext_file.dart';
+import 'res/data/res_table.dart';
 import 'res/decoder/axml_resource_parser.dart';
 import 'res/decoder/manifest_xml_serializer.dart';
-import 'res/data/res_table.dart';
-import 'res/data/res_package.dart';
-import 'res/data/res_resource.dart';
-import 'res/data/res_id.dart';
 import 'res/data/value/res_value.dart';
 
 // Placeholder for AndrolibException if not already defined broadly
 // Assuming it's in common or defined as previously.
 // For now, let's ensure it's available for AXmlResourceParser
-import '../../brut/common/brut_exception.dart';
-
-import 'package:xml/xml.dart' as xml_pkg;
-import 'package:path/path.dart' as p;
 
 class ApkDecoder {
   ResTable? _resTable;

@@ -1,10 +1,8 @@
-library brut_directory;
+library;
 
 import 'dart:async';
 import 'dart:io' as dart_io;
 import 'dart:typed_data';
-import 'path_not_exist.dart';
-import 'directory_exception.dart';
 import 'apktool_io_exception.dart';
 
 abstract class Directory {
@@ -73,8 +71,9 @@ class DartFileStreamInput extends AbstractInputStream {
       if (chunk.isEmpty) return -1;
       int bytesToCopy = length;
       if (bytesToCopy > chunk.length) bytesToCopy = chunk.length;
-      if (offset + bytesToCopy > buffer.length)
+      if (offset + bytesToCopy > buffer.length) {
         bytesToCopy = buffer.length - offset;
+      }
       buffer.setRange(
         offset,
         offset + bytesToCopy,

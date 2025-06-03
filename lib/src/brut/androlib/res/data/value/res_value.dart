@@ -1,4 +1,4 @@
-library brut_androlib_res_data_value;
+library;
 
 abstract class ResValue {
   // Base class for all resource values
@@ -92,17 +92,17 @@ class ResBagValue extends ResValue {
 class ResArrayValue extends ResBagValue {
   final List<ResScalarValue> items;
 
-  ResArrayValue(ResReferenceValue? parent, this.items) : super(parent);
+  ResArrayValue(super.parent, this.items);
 }
 
 class ResStyleValue extends ResBagValue {
   final Map<int, ResScalarValue> items;
 
-  ResStyleValue(ResReferenceValue? parent, this.items) : super(parent);
+  ResStyleValue(super.parent, this.items);
 }
 
 class ResPluralsValue extends ResBagValue {
   final Map<String, ResScalarValue> items;
 
-  ResPluralsValue(ResReferenceValue? parent, this.items) : super(parent);
+  ResPluralsValue(super.parent, this.items);
 }

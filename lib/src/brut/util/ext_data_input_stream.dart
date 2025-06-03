@@ -1,4 +1,4 @@
-library brut_util;
+library;
 
 import 'dart:convert'; // For utf8
 import 'dart:typed_data';
@@ -256,18 +256,22 @@ class ExtDataInputStream implements ExtDataInput {
     }
   }
 
+  @override
   void skipInt() {
     skipBytes(4);
   }
 
+  @override
   void skipByte() {
     skipBytes(1);
   }
 
+  @override
   void skipShort() {
     skipBytes(2);
   }
 
+  @override
   String readNullEndedString(int maxLength) {
     final bytes = <int>[];
     int count = 0;

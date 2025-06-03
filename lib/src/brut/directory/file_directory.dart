@@ -1,17 +1,13 @@
-library brut_directory;
+library;
 
 import 'dart:io' as dart_io;
-import 'dart:collection'; // For LinkedHashSet, LinkedHashMap
 import 'package:path/path.dart' as p;
 
 import 'ext_file.dart';
 import 'abstract_directory.dart';
-import 'directory.dart'; // For AbstractInputStream/OutputStream types
-import '../util/os.dart'; // For OS.mkdirs, OS.rmfileEntity
+import 'directory.dart';
 import 'directory_exception.dart';
-import 'apktool_io_exception.dart';
-import 'path_not_exist.dart'; // Added missing import
-import '../common/brut_exception.dart'; // Import BrutException
+import 'path_not_exist.dart';
 
 class FileDirectory extends AbstractDirectoryBase {
   final dart_io.Directory _dir;
@@ -32,7 +28,7 @@ class FileDirectory extends AbstractDirectoryBase {
 
   @override
   Set<String> loadInitialFiles() {
-    final filesSet = LinkedHashSet<String>();
+    final filesSet = <String>{};
     if (!_dir.existsSync()) return filesSet; // Or throw?
     final entities = _dir.listSync(followLinks: false);
     // Sort to match Java AbstractDirectory behavior (though not strictly required by interface)
@@ -47,7 +43,7 @@ class FileDirectory extends AbstractDirectoryBase {
 
   @override
   Map<String, AbstractDirectoryBase> loadInitialDirs() {
-    final dirsMap = LinkedHashMap<String, AbstractDirectoryBase>();
+    final dirsMap = <String, AbstractDirectoryBase>{};
     if (!_dir.existsSync()) return dirsMap;
     final entities = _dir.listSync(followLinks: false);
     entities.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));

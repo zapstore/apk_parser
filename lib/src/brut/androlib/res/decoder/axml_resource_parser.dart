@@ -1,4 +1,4 @@
-library brut_androlib_res_decoder;
+library;
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -17,7 +17,7 @@ import 'typed_value.dart';
 
 // Placeholder for AndrolibException until its proper location/definition
 class AndrolibException extends BrutException {
-  AndrolibException(String message, [Object? cause]) : super(message, cause);
+  AndrolibException(super.message, [super.cause]);
 }
 
 class AXmlResourceParser implements XmlPullParser {
@@ -94,7 +94,6 @@ class AXmlResourceParser implements XmlPullParser {
         false; // Not operational until first chunk read in doNext()
   }
 
-  @override
   Future<void> close() async {
     if (!_isOperational && _in == null) {
       // Check _in == null as well for initial state
@@ -127,14 +126,14 @@ class AXmlResourceParser implements XmlPullParser {
       _stringBlock = await StringBlock.readWithChunk(_in!);
       _namespaces.increaseDepth();
       _isOperational = true;
-      _event = XmlPullParser.START_DOCUMENT; // Set initial event after setup
+      _event = XmlPullParser.kStartDocument; // Set initial event after setup
       // START_DOCUMENT is a conceptual event before any real tags. The first actual chunk will be processed in the loop.
       // To match XmlPullParser lifecycle, next() should advance from START_DOCUMENT to the first actual tag/event.
       // So, we set START_DOCUMENT here, and the loop below will find the *first* real event.
       return; // Return immediately, next call to _doNext will parse actual content.
     }
 
-    if (_event == XmlPullParser.END_DOCUMENT) {
+    if (_event == XmlPullParser.kEndDocument) {
       return;
     }
 
@@ -148,10 +147,10 @@ class AXmlResourceParser implements XmlPullParser {
       }
 
       // Fake END_DOCUMENT event after last END_TAG and namespace pop
-      if (previousEvent == XmlPullParser.END_TAG &&
+      if (previousEvent == XmlPullParser.kEndTag &&
           _namespaces.getDepth() == 1 &&
           _namespaces.getCurrentCount() == 0) {
-        _event = XmlPullParser.END_DOCUMENT;
+        _event = XmlPullParser.kEndDocument;
         break;
       }
 
@@ -173,20 +172,10 @@ class AXmlResourceParser implements XmlPullParser {
         headerSize = _in!.readUnsignedShort();
         chunkSize = _in!.readInt();
       } catch (e) {
-        // Likely EOF if we are expecting more chunks but stream ends.
-        if (_namespaces.getDepth() > 0 ||
-            previousEvent != XmlPullParser.END_DOCUMENT) {
-          print(
-            '[AXmlResourceParser] Warning: Hit end of stream prematurely. Current depth: ${_namespaces.getDepth()}, last event: $previousEvent',
-          );
-        }
-        _event = XmlPullParser.END_DOCUMENT;
         _setFirstError(
-          AndrolibException(
-            "Premature end of file encountered in AXML.",
-            e is Object ? e : null,
-          ),
+          AndrolibException("Premature end of file encountered in AXML.", e),
         );
+        _event = XmlPullParser.kEndDocument;
         break;
       }
 
@@ -213,9 +202,9 @@ class AXmlResourceParser implements XmlPullParser {
 
       if (chunkType < ARSCConstants.RES_XML_FIRST_CHUNK_TYPE ||
           chunkType > ARSCConstants.RES_XML_LAST_CHUNK_TYPE) {
-        print(
-          '[AXmlResourceParser] Unknown XML chunk type 0x${chunkType.toRadixString(16)} at offset 0x${chunkStartPosition.toRadixString(16)}, size $chunkSize. Skipping.',
-        );
+        // print(
+        //   '[AXmlResourceParser] Unknown XML chunk type 0x${chunkType.toRadixString(16)} at offset 0x${chunkStartPosition.toRadixString(16)}, size $chunkSize. Skipping.',
+        // );
         _setFirstError(
           AndrolibException(
             'Unknown XML chunk type: 0x${chunkType.toRadixString(16)}',
@@ -246,9 +235,9 @@ class AXmlResourceParser implements XmlPullParser {
 
       if (chunkType == ARSCConstants.RES_XML_END_NAMESPACE_TYPE) {
         if (!_hasEncounteredStartElement && _namespaces.getDepth() <= 1) {
-          print(
-            '[AXmlResourceParser] Warning: Skipping end namespace at 0x${chunkStartPosition.toRadixString(16)} before any start element.',
-          );
+          // print(
+          //   '[AXmlResourceParser] Warning: Skipping end namespace at 0x${chunkStartPosition.toRadixString(16)} before any start element.',
+          // );
         } // else allow normal pop
 
         /*final int prefix =*/
@@ -268,8 +257,7 @@ class AXmlResourceParser implements XmlPullParser {
 
         /*final int attributeStartOffset =*/
         _in!.readUnsignedShort(); // Offset from start of this chunk to attribute structures
-        final int attributeStructureSize = _in!
-            .readUnsignedShort(); // Size of each attribute structure (usually 20 bytes)
+        _in!.readUnsignedShort(); // Size of each attribute structure (usually 20 bytes)
         final int attributeCount = _in!.readUnsignedShort();
 
         _idIndex =
@@ -296,7 +284,7 @@ class AXmlResourceParser implements XmlPullParser {
         }
 
         _namespaces.increaseDepth();
-        _event = XmlPullParser.START_TAG;
+        _event = XmlPullParser.kStartTag;
         _ensureChunkConsumed(chunkHeader);
         break;
       }
@@ -304,7 +292,7 @@ class AXmlResourceParser implements XmlPullParser {
       if (chunkType == ARSCConstants.RES_XML_END_ELEMENT_TYPE) {
         _namespaceIndex = _in!.readInt();
         _nameIndex = _in!.readInt();
-        _event = XmlPullParser.END_TAG;
+        _event = XmlPullParser.kEndTag;
         _decreaseDepth = true;
         _ensureChunkConsumed(chunkHeader);
         break;
@@ -316,23 +304,23 @@ class AXmlResourceParser implements XmlPullParser {
         _in!.readInt(); // Should be TypedValue for the string type
         /*final int rawDataValue =*/
         _in!.readInt(); // Raw data, usually 0 or same as _nameIndex
-        _event = XmlPullParser.TEXT;
+        _event = XmlPullParser.kText;
         _ensureChunkConsumed(chunkHeader);
         break;
       }
 
       // If we reach here, it means an XML chunk type that should have been handled was not.
       // This indicates a logic error or an unhandled valid chunk.
-      print(
-        '[AXmlResourceParser] Internal Error: Unhandled XML chunk type 0x${chunkType.toRadixString(16)} after initial checks.',
-      );
+      // print(
+      //   '[AXmlResourceParser] Internal Error: Unhandled XML chunk type 0x${chunkType.toRadixString(16)} after initial checks.',
+      // );
       _setFirstError(
         AndrolibException(
           'Internal AXML parsing error for chunk type: 0x${chunkType.toRadixString(16)}',
         ),
       );
       _event =
-          XmlPullParser.END_DOCUMENT; // Terminate parsing on internal error
+          XmlPullParser.kEndDocument; // Terminate parsing on internal error
       break;
     } // end while(true)
   }
@@ -346,15 +334,15 @@ class AXmlResourceParser implements XmlPullParser {
       final remaining = chunkHeader.chunkSize - bytesActuallyReadForThisChunk;
       if (remaining > 0) {
         // Only skip if there's something to skip
-        print(
-          '[AXmlResourceParser] Chunk 0x${chunkHeader.type.toRadixString(16)} (size ${chunkHeader.chunkSize}) not fully consumed. Read: $bytesActuallyReadForThisChunk. Skipping $remaining bytes.',
-        );
+        // print(
+        //   '[AXmlResourceParser] Chunk 0x${chunkHeader.type.toRadixString(16)} (size ${chunkHeader.chunkSize}) not fully consumed. Read: $bytesActuallyReadForThisChunk. Skipping $remaining bytes.',
+        // );
         _in!.skipBytes(remaining);
       }
     } else if (bytesActuallyReadForThisChunk > chunkHeader.chunkSize) {
-      print(
-        '[AXmlResourceParser] Error: Chunk 0x${chunkHeader.type.toRadixString(16)} overran. Read $bytesActuallyReadForThisChunk, chunk size ${chunkHeader.chunkSize}.',
-      );
+      // print(
+      //   '[AXmlResourceParser] Error: Chunk 0x${chunkHeader.type.toRadixString(16)} overran. Read $bytesActuallyReadForThisChunk, chunk size ${chunkHeader.chunkSize}.',
+      // );
     }
   }
 
@@ -384,11 +372,11 @@ class AXmlResourceParser implements XmlPullParser {
   @override
   Future<int> nextTag() async {
     int eventType = await next();
-    if (eventType == XmlPullParser.TEXT && isWhitespace()) {
+    if (eventType == XmlPullParser.kText && isWhitespace()) {
       eventType = await next();
     }
-    if (eventType != XmlPullParser.START_TAG &&
-        eventType != XmlPullParser.END_TAG) {
+    if (eventType != XmlPullParser.kStartTag &&
+        eventType != XmlPullParser.kEndTag) {
       throw XmlPullParserException("Expected start or end tag.", parser: this);
     }
     return eventType;
@@ -396,24 +384,24 @@ class AXmlResourceParser implements XmlPullParser {
 
   @override
   Future<String?> nextText() async {
-    if (await getEventType() != XmlPullParser.START_TAG) {
+    if (getEventType() != XmlPullParser.kStartTag) {
       throw XmlPullParserException(
         "Parser must be on START_TAG to read next text.",
         parser: this,
       );
     }
     int eventType = await next();
-    if (eventType == XmlPullParser.TEXT) {
+    if (eventType == XmlPullParser.kText) {
       String? result = getText();
       eventType = await next();
-      if (eventType != XmlPullParser.END_TAG) {
+      if (eventType != XmlPullParser.kEndTag) {
         throw XmlPullParserException(
           "Event TEXT must be immediately followed by END_TAG.",
           parser: this,
         );
       }
       return result;
-    } else if (eventType == XmlPullParser.END_TAG) {
+    } else if (eventType == XmlPullParser.kEndTag) {
       return "";
     } else {
       throw XmlPullParserException(
@@ -430,7 +418,7 @@ class AXmlResourceParser implements XmlPullParser {
         (namespace != null && namespace != getNamespace()) ||
         (name != null && name != getName())) {
       throw XmlPullParserException(
-        "expected ${XmlPullParser.TYPES[type]} (ns=$namespace name=$name) found ${XmlPullParser.TYPES[currentEvent]} (ns=${getNamespace()} name=${getName()})",
+        "expected ${XmlPullParser.kTypes[type]} (ns=$namespace name=$name) found ${XmlPullParser.kTypes[currentEvent]} (ns=${getNamespace()} name=${getName()})",
         parser: this,
       );
     }
@@ -448,8 +436,8 @@ class AXmlResourceParser implements XmlPullParser {
   @override
   String? getName() {
     if (_nameIndex == -1 ||
-        (_event != XmlPullParser.START_TAG &&
-            _event != XmlPullParser.END_TAG)) {
+        (_event != XmlPullParser.kStartTag &&
+            _event != XmlPullParser.kEndTag)) {
       return null;
     }
     return _stringBlock?.getString(_nameIndex);
@@ -459,7 +447,7 @@ class AXmlResourceParser implements XmlPullParser {
   String? getText() {
     // For START_TAG and END_TAG, text is null.
     // For TEXT (from CDATA), _nameIndex holds the string index.
-    if (_nameIndex == -1 || _event != XmlPullParser.TEXT) {
+    if (_nameIndex == -1 || _event != XmlPullParser.kText) {
       return null;
     }
     return _stringBlock?.getString(_nameIndex);
@@ -492,7 +480,7 @@ class AXmlResourceParser implements XmlPullParser {
 
   @override
   String getPositionDescription() =>
-      "XML line #$_lineNumber, event ${_event != -1 ? XmlPullParser.TYPES[_event] : 'NONE'}";
+      "XML line #$_lineNumber, event ${_event != -1 ? XmlPullParser.kTypes[_event] : 'NONE'}";
 
   @override
   int getNamespaceCount(int depth) => _namespaces.getAccumulatedCount(depth);
@@ -500,8 +488,9 @@ class AXmlResourceParser implements XmlPullParser {
   @override
   String? getNamespacePrefix(int pos) {
     final prefixStrIdx = _namespaces.getPrefix(pos);
-    if (prefixStrIdx == -1)
+    if (prefixStrIdx == -1) {
       return null; // Default namespace has no prefix string
+    }
     return _stringBlock?.getString(prefixStrIdx);
   }
 
@@ -585,14 +574,14 @@ class AXmlResourceParser implements XmlPullParser {
   // --- XmlPullParser Attribute methods ---
   @override
   int getAttributeCount() {
-    if (_event != XmlPullParser.START_TAG || _attributes == null) {
+    if (_event != XmlPullParser.kStartTag || _attributes == null) {
       return -1;
     }
     return _attributes!.length ~/ _attributeLength;
   }
 
   int _getAttributeOffset(int index) {
-    if (_event != XmlPullParser.START_TAG) {
+    if (_event != XmlPullParser.kStartTag) {
       throw StateError(
         "Current event is not START_TAG for getAttributeOffset.",
       );
@@ -644,8 +633,9 @@ class AXmlResourceParser implements XmlPullParser {
     final uriIdx = _attributes![offset + _attributeIxNamespaceUri];
     if (uriIdx == -1 || _stringBlock == null) return null;
     final prefixIdx = _namespaces.findPrefix(uriIdx);
-    if (prefixIdx == -1)
+    if (prefixIdx == -1) {
       return null; // Default namespace has no prefix string (or prefix not found)
+    }
     return _stringBlock!.getString(prefixIdx);
   }
 
@@ -825,10 +815,12 @@ class AXmlResourceParser implements XmlPullParser {
       throw XmlPullParserException(_eNotSupported, parser: this);
   @override
   bool getFeature(String name) {
-    if (name == XmlPullParser.FEATURE_PROCESS_NAMESPACES)
+    if (name == XmlPullParser.kFeatureProcessNamespaces) {
       return true; // AXML is namespace aware
-    if (name == XmlPullParser.FEATURE_REPORT_NAMESPACE_ATTRIBUTES)
+    }
+    if (name == XmlPullParser.kFeatureReportNamespaceAttributes) {
       return true; // Reports xmlns attributes
+    }
     return false;
   }
 
@@ -864,7 +856,7 @@ class AXmlResourceParser implements XmlPullParser {
 
   @override
   bool isWhitespace() {
-    if (_event == XmlPullParser.TEXT) {
+    if (_event == XmlPullParser.kText) {
       String? txt = getText();
       if (txt == null || txt.isEmpty) return true;
       for (int i = 0; i < txt.length; i++) {

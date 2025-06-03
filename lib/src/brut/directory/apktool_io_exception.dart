@@ -1,4 +1,4 @@
-library brut_directory;
+library;
 
 class ApktoolIOException implements Exception {
   final String message;

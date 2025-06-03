@@ -1,4 +1,4 @@
-library brut_androlib_res_data_arsc;
+library;
 
 // Chunk types from ARSCHeader.java
 class ARSCConstants {

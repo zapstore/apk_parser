@@ -1,8 +1,9 @@
-library brut_directory;
+// ignore_for_file: prefer_collection_literals
+
+library;
 
 import 'dart:collection';
 import 'package:archive/archive.dart' as archive;
-import 'dart:typed_data';
 
 import 'ext_file.dart';
 import 'abstract_directory.dart';
@@ -22,7 +23,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
   bool _dirsLoaded = false;
   final Set<String> _lazyFiles = LinkedHashSet<String>();
   final Map<String, AbstractDirectoryBase> _lazyDirs =
-      LinkedHashMap<String, AbstractDirectoryBase>();
+      <String, AbstractDirectoryBase>{};
 
   ZipRODirectory(this._zipExtFile, [this._zipPathPrefix = '']) {
     // _archiveInstance will be loaded lazily or an error will be thrown if accessed before load.
@@ -94,7 +95,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
   @override
   Map<String, AbstractDirectoryBase> loadInitialDirs() {
     // Return empty map for sync initialization, dirs will be loaded lazily
-    return LinkedHashMap<String, AbstractDirectoryBase>();
+    return <String, AbstractDirectoryBase>{};
   }
 
   @override
@@ -107,9 +108,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
       throw PathNotExist('File not found in zip: $fullName');
     }
     // file.content is List<int> (Uint8List usually)
-    return MemoryInputStream(
-      file.content as Uint8List,
-    ); // Use helper from directory.dart
+    return MemoryInputStream(file.content); // Use helper from directory.dart
   }
 
   // Override getFileInput to handle lazy loading

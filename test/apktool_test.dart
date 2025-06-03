@@ -46,7 +46,9 @@ void main() {
               .toList();
 
           final iconResolved = iconAttr != null && !iconAttr.startsWith('@0x');
-          if (iconResolved) iconResolvedCount++;
+          if (iconResolved) {
+            iconResolvedCount++;
+          }
 
           print(
             '$apkName: ✅ Manifest decoded | Icon: ${iconResolved ? "✅" : "❌"} $iconAttr | Unresolved: ${unresolvedMatches.length}',
@@ -109,10 +111,11 @@ void main() {
         if (entity is File) {
           fileCount++;
           final ext = p.extension(entity.path).toLowerCase();
-          if (ext == '.png')
+          if (ext == '.png') {
             pngCount++;
-          else if (ext == '.xml')
+          } else if (ext == '.xml') {
             xmlCount++;
+          }
         }
       }
 

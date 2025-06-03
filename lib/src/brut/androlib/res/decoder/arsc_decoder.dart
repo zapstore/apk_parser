@@ -1,6 +1,5 @@
-library brut_androlib_res_decoder;
+library;
 
-import 'dart:typed_data';
 import 'package:apktool_dart/src/brut/util/ext_data_input.dart';
 import '../data/arsc/arsc_header.dart';
 import '../data/res_table.dart';
@@ -15,21 +14,41 @@ import '../data/value/res_value.dart';
 import 'string_block.dart';
 import 'typed_value.dart';
 
+// Constants for ARSC file format
+class ARSCConstants {
+  // Resource types
+  static const int kResNullType = 0x0000;
+  static const int kResStringPoolType = 0x0001;
+  static const int kResTableType = 0x0002;
+  static const int kResNoneType = 0xFFFF;
+
+  // Table resource types
+  static const int kResTablePackageType = 0x0200;
+  static const int kResTableTypeType = 0x0201;
+  static const int kResTableTypeSpecType = 0x0202;
+  static const int kResTableLibraryType = 0x0203;
+  static const int kResTableOverlayableType = 0x0204;
+  static const int kResTableOverlayablePolicyType = 0x0205;
+  static const int kResTableStagedAliasType = 0x0206;
+}
+
+// Entry flags
+const int kEntryFlagComplex = 0x0001;
+const int kEntryFlagPublic = 0x0002;
+const int kEntryFlagWeak = 0x0004;
+const int kEntryFlagCompact = 0x0008;
+
+// Table type flags
+const int kTableTypeFlagSparse = 0x01;
+const int kTableTypeFlagOffset16 = 0x02;
+
+// Special entry values
+const int kNoEntry = 0xFFFFFFFF;
+const int kNoEntryOffset16 = 0xFFFF;
+
 class ARSCDecoder {
-  static const int ENTRY_FLAG_COMPLEX = 0x0001;
-  static const int ENTRY_FLAG_PUBLIC = 0x0002;
-  static const int ENTRY_FLAG_WEAK = 0x0004;
-  static const int ENTRY_FLAG_COMPACT = 0x0008;
-
-  static const int TABLE_TYPE_FLAG_SPARSE = 0x01;
-  static const int TABLE_TYPE_FLAG_OFFSET16 = 0x02;
-
-  static const int NO_ENTRY = 0xFFFFFFFF;
-  static const int NO_ENTRY_OFFSET16 = 0xFFFF;
-
   final ExtDataInput _in;
   final ResTable _resTable;
-  final bool _keepBroken;
 
   ARSCHeader? _header;
   StringBlock? _tableStrings;
@@ -44,8 +63,7 @@ class ARSCDecoder {
 
   final Map<int, ResTypeSpec> _resTypeSpecs = {};
 
-  ARSCDecoder(this._in, this._resTable, {bool keepBroken = false})
-    : _keepBroken = keepBroken;
+  ARSCDecoder(this._in, this._resTable, {bool keepBroken = false});
 
   Future<ARSCData> decode() async {
     final packages = <ResPackage>[];
@@ -65,20 +83,20 @@ class ARSCDecoder {
       if (_header == null) break;
 
       switch (_header!.type) {
-        case ARSCConstants.RES_NULL_TYPE:
-          print('DEBUG: Processing RES_NULL_TYPE chunk');
+        case ARSCConstants.kResNullType:
+          // print('DEBUG: Processing RES_NULL_TYPE chunk');
           await _readUnknownChunk();
           break;
-        case ARSCConstants.RES_STRING_POOL_TYPE:
-          print('DEBUG: Processing RES_STRING_POOL_TYPE chunk');
+        case ARSCConstants.kResStringPoolType:
+          // print('DEBUG: Processing RES_STRING_POOL_TYPE chunk');
           await _readStringPoolChunk();
           break;
-        case ARSCConstants.RES_TABLE_TYPE:
-          print('DEBUG: Processing RES_TABLE_TYPE chunk');
+        case ARSCConstants.kResTableType:
+          // print('DEBUG: Processing RES_TABLE_TYPE chunk');
           await _readTableChunk();
           break;
-        case ARSCConstants.RES_TABLE_PACKAGE_TYPE:
-          print('DEBUG: Processing RES_TABLE_PACKAGE_TYPE chunk');
+        case ARSCConstants.kResTablePackageType:
+          // print('DEBUG: Processing RES_TABLE_PACKAGE_TYPE chunk');
           _typeIdOffset = 0;
           final pkg = await _readTablePackage();
           if (pkg != null) {
@@ -86,55 +104,48 @@ class ARSCDecoder {
             packageMap[pkg.getId()] = pkg;
           }
           break;
-        case ARSCConstants.RES_TABLE_TYPE_TYPE:
-          print('DEBUG: Processing RES_TABLE_TYPE_TYPE chunk');
+        case ARSCConstants.kResTableTypeType:
+          // print('DEBUG: Processing RES_TABLE_TYPE_TYPE chunk');
           await _readTableType();
           break;
-        case ARSCConstants.RES_TABLE_TYPE_SPEC_TYPE:
-          print('DEBUG: Processing RES_TABLE_TYPE_SPEC_TYPE chunk');
+        case ARSCConstants.kResTableTypeSpecType:
+          // print('DEBUG: Processing RES_TABLE_TYPE_SPEC_TYPE chunk');
           typeSpec = await _readTableSpecType();
           if (typeSpec != null) {
             _resTypeSpecs[typeSpec.getId()] = typeSpec;
           }
           break;
-        case ARSCConstants.RES_TABLE_LIBRARY_TYPE:
-          print('DEBUG: Processing RES_TABLE_LIBRARY_TYPE chunk');
+        case ARSCConstants.kResTableLibraryType:
+          // print('DEBUG: Processing RES_TABLE_LIBRARY_TYPE chunk');
           await _readLibraryType();
           break;
-        case ARSCConstants.RES_TABLE_OVERLAYABLE_TYPE:
-          print('DEBUG: Processing RES_TABLE_OVERLAYABLE_TYPE chunk');
+        case ARSCConstants.kResTableOverlayableType:
+          // print('DEBUG: Processing RES_TABLE_OVERLAYABLE_TYPE chunk');
           await _readOverlaySpec();
           break;
-        case ARSCConstants.RES_TABLE_OVERLAYABLE_POLICY_TYPE:
-          print('DEBUG: Processing RES_TABLE_OVERLAYABLE_POLICY_TYPE chunk');
+        case ARSCConstants.kResTableOverlayablePolicyType:
+          // print('DEBUG: Processing RES_TABLE_OVERLAYABLE_POLICY_TYPE chunk');
           await _readOverlayPolicySpec();
           break;
-        case ARSCConstants.RES_TABLE_STAGED_ALIAS_TYPE:
-          print('DEBUG: Processing RES_TABLE_STAGED_ALIAS_TYPE chunk');
+        case ARSCConstants.kResTableStagedAliasType:
+          // print('DEBUG: Processing RES_TABLE_STAGED_ALIAS_TYPE chunk');
           await _readStagedAliasSpec();
           break;
         default:
-          if (_header!.type != ARSCConstants.RES_NONE_TYPE) {
-            print('Unknown chunk type: 0x${_header!.type.toRadixString(16)}');
+          if (_header!.type != ARSCConstants.kResNoneType) {
+            // print('Unknown chunk type: 0x${_header!.type.toRadixString(16)}');
           }
           break;
       }
 
       // Ensure we're positioned at the end of the chunk
-      if (_header!.type != ARSCConstants.RES_TABLE_PACKAGE_TYPE) {
+      if (_header!.type != ARSCConstants.kResTablePackageType) {
         final expectedEndPos = _header!.endPosition;
         final currentPos = _in.position();
         if (currentPos < expectedEndPos) {
           _in.jumpTo(expectedEndPos);
         }
       }
-    }
-
-    print('DEBUG: Returning ${packages.length} packages');
-    for (final pkg in packages) {
-      print(
-        '  Package: id=0x${pkg.getId().toRadixString(16)}, name=${pkg.getName()}, specs=${pkg.getResSpecCount()}',
-      );
     }
 
     return ARSCData(packages);
@@ -156,7 +167,7 @@ class ARSCDecoder {
 
   Future<void> _readTable() async {
     final header = await _readChunkHeader();
-    if (header == null || header.type != ARSCConstants.RES_TABLE_TYPE) {
+    if (header == null || header.type != ARSCConstants.kResTableType) {
       throw Exception('No RES_TABLE_TYPE found');
     }
     _in.readInt(); // packageCount
@@ -176,15 +187,15 @@ class ARSCDecoder {
 
     if (_stringPoolCount == 1) {
       _tableStrings = stringBlock;
-      print(
-        'DEBUG: Loaded table strings with ${_tableStrings!.getCount()} strings',
-      );
+      // print(
+      //   'DEBUG: Loaded table strings with ${_tableStrings!.getCount()} strings',
+      // );
     } else if (_stringPoolCount == 2 && _package != null) {
       _typeNames = stringBlock;
-      print('DEBUG: Loaded type names with ${_typeNames!.getCount()} strings');
+      // print('DEBUG: Loaded type names with ${_typeNames!.getCount()} strings');
     } else if (_stringPoolCount == 3 && _package != null) {
       _specNames = stringBlock;
-      print('DEBUG: Loaded spec names with ${_specNames!.getCount()} strings');
+      // print('DEBUG: Loaded spec names with ${_specNames!.getCount()} strings');
     }
   }
 
@@ -198,7 +209,7 @@ class ARSCDecoder {
 
   Future<ResPackage?> _readTablePackage() async {
     final packageStart = _header!.startPosition;
-    final packageEnd = _header!.endPosition;
+    // final packageEnd = _header!.endPosition;
 
     final id = _in.readInt();
     final name = _in.readNullEndedString(128);
@@ -206,10 +217,6 @@ class ARSCDecoder {
     _in.skipInt(); // lastPublicType
     final keyStringsOffset = _in.readInt(); // keyStrings
     _in.skipInt(); // lastPublicKey
-
-    print(
-      'DEBUG: Package offsets - typeStrings=$typeStringsOffset, keyStrings=$keyStringsOffset',
-    );
 
     // Check for split header size
     const splitHeaderSize = 2 + 2 + 4 + 4 + (2 * 128) + (4 * 5);
@@ -221,14 +228,14 @@ class ARSCDecoder {
     if (typeStringsOffset > 0) {
       _in.jumpTo(packageStart + typeStringsOffset);
       _typeNames = await StringBlock.readWithChunk(_in);
-      print('DEBUG: Loaded typeNames with ${_typeNames!.getCount()} strings');
+      // print('DEBUG: Loaded typeNames with ${_typeNames!.getCount()} strings');
     }
 
     // Jump to keyStrings position within the package
     if (keyStringsOffset > 0) {
       _in.jumpTo(packageStart + keyStringsOffset);
       _specNames = await StringBlock.readWithChunk(_in);
-      print('DEBUG: Loaded specNames with ${_specNames!.getCount()} strings');
+      // print('DEBUG: Loaded specNames with ${_specNames!.getCount()} strings');
     }
 
     // After reading the string pools, position at the end of the header
@@ -244,9 +251,9 @@ class ARSCDecoder {
     _resId = packageId << 24;
     _package = ResPackage(_resTable, packageId, name);
 
-    print(
-      'DEBUG: Created package id=0x${packageId.toRadixString(16)}, name="$name"',
-    );
+    // print(
+    //   'DEBUG: Created package id=0x${packageId.toRadixString(16)}, name="$name"',
+    // );
 
     return _package;
   }
@@ -258,7 +265,7 @@ class ARSCDecoder {
       final id = _in.readInt();
       final name = _in.readNullEndedString(128);
       _resTable.addDynamicRefPackage(id, name);
-      print('Shared library id: $id, name: "$name"');
+      // print('Shared library id: $id, name: "$name"');
     }
   }
 
@@ -266,16 +273,18 @@ class ARSCDecoder {
     final count = _in.readInt();
 
     for (int i = 0; i < count; i++) {
-      print(
-        'Staged alias: 0x${_in.readInt().toRadixString(16)} -> 0x${_in.readInt().toRadixString(16)}',
-      );
+      // print(
+      //   'Staged alias: 0x${_in.readInt().toRadixString(16)} -> 0x${_in.readInt().toRadixString(16)}',
+      // );
+      _in.readInt();
+      _in.readInt();
     }
   }
 
   Future<void> _readOverlaySpec() async {
-    final name = _in.readNullEndedString(256);
-    final actor = _in.readNullEndedString(256);
-    print('Overlay name: "$name", actor: "$actor"');
+    _in.readNullEndedString(256);
+    _in.readNullEndedString(256);
+    // print('Overlay name: "$name", actor: "$actor"');
   }
 
   Future<void> _readOverlayPolicySpec() async {
@@ -283,7 +292,8 @@ class ARSCDecoder {
     final count = _in.readInt();
 
     for (int i = 0; i < count; i++) {
-      print('Skipping overlay (0x${_in.readInt().toRadixString(16)})');
+      // print('Skipping overlay (0x${_in.readInt().toRadixString(16)})');
+      _in.readInt();
     }
   }
 
@@ -293,7 +303,7 @@ class ARSCDecoder {
     _in.skipShort(); // reserved1
     final entryCount = _in.readInt();
 
-    print('DEBUG _readTableSpecType: id=$id, entryCount=$entryCount');
+    // print('DEBUG _readTableSpecType: id=$id, entryCount=$entryCount');
 
     // Skip flags
     for (int i = 0; i < entryCount; i++) {
@@ -301,32 +311,31 @@ class ARSCDecoder {
     }
 
     if (_typeNames == null || id == 0 || id > _typeNames!.getCount()) {
-      print(
-        'DEBUG _readTableSpecType: Failed - typeNames=${_typeNames?.getCount()}, id=$id',
-      );
+      // print(
+      //   'DEBUG _readTableSpecType: Failed - typeNames=${_typeNames?.getCount()}, id=$id',
+      // );
       return null;
     }
 
     final typeName = _typeNames!.getString(id - 1);
     if (typeName == null) {
-      print('DEBUG _readTableSpecType: Failed - typeName is null for id=$id');
+      // print('DEBUG _readTableSpecType: Failed - typeName is null for id=$id');
       return null;
     }
 
     _typeSpec = ResTypeSpec(typeName, id);
     _package?.addType(_typeSpec!);
 
-    print(
-      'DEBUG: Added type spec "$typeName" (id=$id) to package "${_package?.getName()}", entryCount=$entryCount',
-    );
+    // print(
+    //   'DEBUG: Added type spec "$typeName" (id=$id) to package "${_package?.getName()}", entryCount=$entryCount',
+    // );
 
     return _typeSpec;
   }
 
   Future<void> _readTableType() async {
-    final chunkStart = _header!.startPosition;
+    // final chunkStart = _header!.startPosition;
     final chunkEnd = _header!.endPosition;
-    print('DEBUG _readTableType: start=$chunkStart, end=$chunkEnd');
 
     final typeId = _in.readUnsignedByte() - _typeIdOffset;
 
@@ -337,14 +346,14 @@ class ARSCDecoder {
       if (_typeNames == null ||
           typeId == 0 ||
           typeId > _typeNames!.getCount()) {
-        print('DEBUG _readTableType: skipping - no type name for id=$typeId');
+        // print('DEBUG _readTableType: skipping - no type name for id=$typeId');
         return;
       }
       final typeName = _typeNames!.getString(typeId - 1);
       if (typeName == null) {
-        print(
-          'DEBUG _readTableType: skipping - type name is null for id=$typeId',
-        );
+        // print(
+        //   'DEBUG _readTableType: skipping - type name is null for id=$typeId',
+        // );
         return;
       }
 
@@ -360,15 +369,15 @@ class ARSCDecoder {
     final entryCount = _in.readInt();
     final entriesStart = _in.readInt();
 
-    print(
-      'DEBUG _readTableType: type=${_typeSpec?.getName()}, entryCount=$entryCount, entriesStart=$entriesStart',
-    );
+    // print(
+    //   'DEBUG _readTableType: type=${_typeSpec?.getName()}, entryCount=$entryCount, entriesStart=$entriesStart',
+    // );
 
     final flags = await _readConfigFlags();
     _type = _package?.getOrCreateConfig(flags);
 
-    final isOffset16 = (typeFlags & TABLE_TYPE_FLAG_OFFSET16) != 0;
-    final isSparse = (typeFlags & TABLE_TYPE_FLAG_SPARSE) != 0;
+    final isOffset16 = (typeFlags & kTableTypeFlagOffset16) != 0;
+    final isSparse = (typeFlags & kTableTypeFlagSparse) != 0;
 
     // Read entry offsets
     final entryOffsets = <int, int>{};
@@ -380,8 +389,8 @@ class ARSCDecoder {
         final rawOffset = isOffset16 ? _in.readUnsignedShort() : _in.readInt();
         // For 32-bit values, check if it's NO_ENTRY (-1 when read as signed int)
         final isNoEntry = isOffset16
-            ? (rawOffset == NO_ENTRY_OFFSET16)
-            : (rawOffset == -1 || rawOffset == NO_ENTRY);
+            ? (rawOffset == kNoEntryOffset16)
+            : (rawOffset == -1 || rawOffset == kNoEntry);
 
         if (!isNoEntry) {
           entryOffsets[idx] = rawOffset * (isOffset16 ? 4 : 1);
@@ -393,34 +402,34 @@ class ARSCDecoder {
         final rawOffset = isOffset16 ? _in.readUnsignedShort() : _in.readInt();
         // For 32-bit values, check if it's NO_ENTRY (-1 when read as signed int)
         final isNoEntry = isOffset16
-            ? (rawOffset == NO_ENTRY_OFFSET16)
-            : (rawOffset == -1 || rawOffset == NO_ENTRY);
+            ? (rawOffset == kNoEntryOffset16)
+            : (rawOffset == -1 || rawOffset == kNoEntry);
 
         if (!isNoEntry) {
           final actualOffset = rawOffset * (isOffset16 ? 4 : 1);
           entryOffsets[i] = actualOffset;
           if (i < 3) {
             // Debug first few entries
-            print(
-              'DEBUG: Entry $i offset=$rawOffset, actualOffset=$actualOffset, isOffset16=$isOffset16',
-            );
+            // print(
+            //   'DEBUG: Entry $i offset=$rawOffset, actualOffset=$actualOffset, isOffset16=$isOffset16',
+            // );
           }
         } else if (i < 3) {
-          print('DEBUG: Entry $i is NO_ENTRY (offset=$rawOffset)');
+          // print('DEBUG: Entry $i is NO_ENTRY (offset=$rawOffset)');
         }
       }
     }
 
-    print(
-      'DEBUG _readTableType: after offsets, pos=${_in.position()}, ${entryOffsets.length} entries to read',
-    );
+    // print(
+    //   'DEBUG _readTableType: after offsets, pos=${_in.position()}, ${entryOffsets.length} entries to read',
+    // );
 
     // Read entries
     final entriesStartPos = _header!.startPosition + entriesStart;
 
     // If no entries to read, skip
     if (entryOffsets.isEmpty) {
-      print('DEBUG _readTableType: no entries to read');
+      // print('DEBUG _readTableType: no entries to read');
     } else {
       // For the first entry, check if we're already at the right position
       var lastPos = _in.position();
@@ -430,9 +439,9 @@ class ARSCDecoder {
 
         // Only jump if we need to move forward or significantly backward
         if (targetPos != lastPos) {
-          print(
-            'DEBUG _readTableType: jumping from $lastPos to $targetPos for entry ${entry.key}',
-          );
+          // print(
+          //   'DEBUG _readTableType: jumping from $lastPos to $targetPos for entry ${entry.key}',
+          // );
           _in.jumpTo(targetPos);
         }
 
@@ -443,19 +452,19 @@ class ARSCDecoder {
 
     // Ensure we're positioned at the end of the chunk
     final currentPos = _in.position();
-    print(
-      'DEBUG _readTableType: chunk end check - current=$currentPos, expected=$chunkEnd, type=${_typeSpec?.getName()}',
-    );
+    // print(
+    //   'DEBUG _readTableType: chunk end check - current=$currentPos, expected=$chunkEnd, type=${_typeSpec?.getName()}',
+    // );
     if (currentPos < chunkEnd) {
       _in.jumpTo(chunkEnd);
     } else if (currentPos > chunkEnd) {
-      print(
-        'WARNING: Overshot TYPE chunk end: current=$currentPos, expected=$chunkEnd, diff=${currentPos - chunkEnd}',
-      );
+      // print(
+      //   'WARNING: Overshot TYPE chunk end: current=$currentPos, expected=$chunkEnd, diff=${currentPos - chunkEnd}',
+      // );
       // If we've only overshot by 1-3 bytes, it might be padding
       if (currentPos - chunkEnd < 4) {
         // Don't try to jump backwards for small overshoots
-        print('Ignoring small overshoot, likely padding');
+        // print('Ignoring small overshoot, likely padding');
       } else {
         // For larger overshoots, this is a real problem
         _in.jumpTo(chunkEnd);
@@ -464,7 +473,7 @@ class ARSCDecoder {
   }
 
   Future<void> _readEntry(int entryId) async {
-    final size = _in.readUnsignedShort();
+    _in.readUnsignedShort(); // Entry size
     final flags = _in.readUnsignedShort();
     final keyIndex = _in.readInt();
 
@@ -479,9 +488,9 @@ class ARSCDecoder {
 
     // Debug logging
     if (resId.id == 0x7f100000) {
-      print(
-        'DEBUG: Found target resource! ID=0x${resId.id.toRadixString(16)}, key=$key, type=${_typeSpec?.getName()}',
-      );
+      // print(
+      //   'DEBUG: Found target resource! ID=0x${resId.id.toRadixString(16)}, key=$key, type=${_typeSpec?.getName()}',
+      // );
     }
 
     // Get or create ResResSpec
@@ -496,7 +505,7 @@ class ARSCDecoder {
     }
 
     ResValue? value;
-    if ((flags & ENTRY_FLAG_COMPLEX) != 0) {
+    if ((flags & kEntryFlagComplex) != 0) {
       value = await _readComplexEntry();
     } else {
       value = await _readValue();
@@ -512,9 +521,9 @@ class ARSCDecoder {
       } catch (e) {
         // Resource already exists, this can happen with multiple configs
         if (e.toString().contains('Multiple resources')) {
-          print(
-            'DEBUG: Resource already exists for ${spec.getName()} in config ${_type!.getFlags()}, skipping',
-          );
+          // print(
+          //   'DEBUG: Resource already exists for ${spec.getName()} in config ${_type!.getFlags()}, skipping',
+          // );
         } else {
           rethrow;
         }
@@ -532,7 +541,7 @@ class ARSCDecoder {
       final resId = _in.readInt();
       final value = await _readValue();
 
-      if (value != null && value is ResScalarValue) {
+      if (value != null) {
         items[resId] = value;
       }
     }
@@ -540,9 +549,9 @@ class ARSCDecoder {
     final parent = parentId != 0 ? ResReferenceValue(parentId) : null;
 
     // Determine bag type based on type spec
-    if (_typeSpec?.getName() == ResTypeSpec.RES_TYPE_NAME_ARRAY) {
+    if (_typeSpec?.getName() == ResTypeSpec.kResTypeNameArray) {
       return ResArrayValue(parent, items.values.toList());
-    } else if (_typeSpec?.getName() == ResTypeSpec.RES_TYPE_NAME_PLURALS) {
+    } else if (_typeSpec?.getName() == ResTypeSpec.kResTypeNamePlurals) {
       final pluralItems = <String, ResScalarValue>{};
       // TODO: Map quantity IDs to strings
       return ResPluralsValue(parent, pluralItems);

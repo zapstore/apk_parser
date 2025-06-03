@@ -1,8 +1,7 @@
-library brut_directory;
+library;
 
 import 'directory_exception.dart';
 
 class PathAlreadyExists extends DirectoryException {
-  PathAlreadyExists([String message = "Path already exists", Object? cause])
-    : super(message, cause);
+  PathAlreadyExists([super.message = "Path already exists", super.cause]);
 }

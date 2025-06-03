@@ -1,14 +1,14 @@
-library brut_androlib_res_data;
+library;
 
 import 'res_res_spec.dart';
 
 class ResTypeSpec {
-  static const String RES_TYPE_NAME_ARRAY = 'array';
-  static const String RES_TYPE_NAME_ATTR = 'attr';
-  static const String RES_TYPE_NAME_ATTR_PRIVATE = '^attr-private';
-  static const String RES_TYPE_NAME_PLURALS = 'plurals';
-  static const String RES_TYPE_NAME_STRING = 'string';
-  static const String RES_TYPE_NAME_STYLES = 'style';
+  static const String kResTypeNameArray = "array";
+  static const String kResTypeNameAttr = "attr";
+  static const String kResTypeNameAttrPrivate = "^attr-private";
+  static const String kResTypeNamePlurals = "plurals";
+  static const String kResTypeNameString = "string";
+  static const String kResTypeNameStyles = "style";
 
   final String _name;
   final int _id;
@@ -20,7 +20,7 @@ class ResTypeSpec {
 
   int getId() => _id;
 
-  bool isString() => _name == RES_TYPE_NAME_STRING;
+  bool isString() => _name == kResTypeNameString;
 
   ResResSpec getResSpec(String name) {
     final spec = getResSpecUnsafe(name);

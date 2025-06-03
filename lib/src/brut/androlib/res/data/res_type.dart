@@ -1,4 +1,4 @@
-library brut_androlib_res_data;
+library;
 
 import 'res_config_flags.dart';
 import 'res_res_spec.dart';

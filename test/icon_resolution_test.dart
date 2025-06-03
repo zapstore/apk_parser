@@ -16,11 +16,9 @@ void main() {
 
       print('\n=== Testing android:icon resolution ===');
 
-      // Parse the XML
+      // Parse the XML and get the android:icon attribute
       final doc = xml.XmlDocument.parse(decodedXml);
       final applicationElement = doc.findAllElements('application').first;
-
-      // Get the android:icon attribute
       final iconAttr =
           applicationElement.getAttribute('icon', namespace: 'android') ??
           applicationElement.getAttribute('android:icon');
@@ -30,8 +28,6 @@ void main() {
       // Check if it's resolved
       if (iconAttr != null && iconAttr.startsWith('@0x')) {
         print('❌ Icon is not resolved - still shows resource ID: $iconAttr');
-
-        // Try to manually resolve it
         final hexStr = iconAttr.substring(3);
         final resId = int.parse(hexStr, radix: 16);
         print('Resource ID: 0x${resId.toRadixString(16)} (decimal: $resId)');
@@ -46,59 +42,46 @@ void main() {
           print('Resource type: $resourceType');
           print('Resource name: $resourceName');
 
-          // Check if corresponding file exists in golden version
+          // Check if corresponding files exist in golden version
           if (resourceType == 'mipmap' || resourceType == 'drawable') {
             print('\nChecking for corresponding files in golden version:');
 
-            // Common density qualifiers
-            final densities = [
-              'mdpi',
-              'hdpi',
-              'xhdpi',
-              'xxhdpi',
-              'xxxhdpi',
-              'anydpi-v26',
-            ];
+            final densities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'];
             var foundAny = false;
 
             for (final density in densities) {
-              final possiblePath = p.join(
+              // Check PNG
+              final pngPath = p.join(
                 goldenDir,
                 'res',
                 '$resourceType-$density',
                 '$resourceName.png',
               );
-              final possibleFile = File(possiblePath);
-
-              if (await possibleFile.exists()) {
-                print('✅ Found: $possiblePath');
+              if (await File(pngPath).exists()) {
+                print('✅ Found: $pngPath');
                 foundAny = true;
               }
 
-              // Also check webp format
+              // Check WebP
               final webpPath = p.join(
                 goldenDir,
                 'res',
                 '$resourceType-$density',
                 '$resourceName.webp',
               );
-              final webpFile = File(webpPath);
-
-              if (await webpFile.exists()) {
+              if (await File(webpPath).exists()) {
                 print('✅ Found: $webpPath');
                 foundAny = true;
               }
 
-              // Check XML vector drawable
+              // Check XML
               final xmlPath = p.join(
                 goldenDir,
                 'res',
                 '$resourceType-$density',
                 '$resourceName.xml',
               );
-              final xmlFile = File(xmlPath);
-
-              if (await xmlFile.exists()) {
+              if (await File(xmlPath).exists()) {
                 print('✅ Found: $xmlPath');
                 foundAny = true;
               }
@@ -111,8 +94,7 @@ void main() {
               resourceType,
               '$resourceName.png',
             );
-            final baseFile = File(basePath);
-            if (await baseFile.exists()) {
+            if (await File(basePath).exists()) {
               print('✅ Found: $basePath');
               foundAny = true;
             }
@@ -126,7 +108,7 @@ void main() {
         print('❌ No android:icon attribute found');
       }
 
-      // Also check golden manifest for comparison
+      // Compare with golden manifest
       final goldenManifestPath = p.join(goldenDir, 'AndroidManifest.xml');
       final goldenManifestFile = File(goldenManifestPath);
 
@@ -148,6 +130,9 @@ void main() {
           print('   Current: $iconAttr');
           print('   Golden:  $goldenIcon');
         }
+
+        // Test assertion
+        expect(iconAttr, equals(goldenIcon));
       }
     });
   });

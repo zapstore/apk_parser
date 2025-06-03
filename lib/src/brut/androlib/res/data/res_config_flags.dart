@@ -1,4 +1,4 @@
-library brut_androlib_res_data;
+library;
 
 // Simplified version - full implementation would include all configuration dimensions
 class ResConfigFlags {

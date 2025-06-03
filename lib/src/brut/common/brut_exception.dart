@@ -1,4 +1,4 @@
-library brut_common;
+library;
 
 class BrutException implements Exception {
   final String message;

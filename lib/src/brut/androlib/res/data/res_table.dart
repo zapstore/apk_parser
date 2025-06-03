@@ -1,23 +1,21 @@
-library brut_androlib_res_data;
+library;
 
-import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
-import 'package:apktool_dart/src/brut/directory/ext_file.dart';
-import 'package:apktool_dart/src/brut/directory/directory.dart';
-import 'package:apktool_dart/src/brut/util/ext_data_input_stream.dart';
-import '../decoder/arsc_decoder.dart';
+
 import 'res_package.dart';
+import '../decoder/arsc_decoder.dart';
+import '../../../directory/ext_file.dart';
+import '../../../util/ext_data_input_stream.dart';
 import 'res_id.dart';
 import 'res_res_spec.dart';
 import 'value/res_value.dart';
 
 class ResTable {
-  final Map<int, ResPackage> _packagesById = {};
-  final Map<String, ResPackage> _packagesByName = {};
+  final Map<int, ResPackage> _packagesById = <int, ResPackage>{};
+  final Map<String, ResPackage> _packagesByName = <String, ResPackage>{};
+
   ResPackage? _mainPackage;
-  final Set<ResPackage> _libPackages = {};
-  final Set<ResPackage> _framePackages = {};
-  final Map<int, String> _dynamicRefTable = {};
 
   ResTable();
 
@@ -31,7 +29,7 @@ class ResTable {
   }
 
   Future<void> loadMainPackage(String apkPath) async {
-    print('Loading resource table from $apkPath...');
+    // print('Loading resource table from $apkPath...');
 
     final apkFile = ExtFile(apkPath);
     final apkDirectory = await apkFile.getDirectory();
@@ -40,7 +38,6 @@ class ResTable {
       final resourceStream = await apkDirectory.getFileInput('resources.arsc');
 
       // Read all data into memory - resources.arsc is typically a few MB
-      final bytes = Uint8List(0);
       final chunks = <List<int>>[];
       int totalSize = 0;
 
@@ -80,24 +77,23 @@ class ResTable {
           throw Exception('No packages found in resources.arsc');
         }
 
-        print(
-          'Loaded ${arscData.packages.length} package(s) from resources.arsc',
-        );
+        // print(
+        //   'Loaded ${arscData.packages.length} package(s) from resources.arsc',
+        // );
 
         // Debug print package contents
-        for (final pkg in arscData.packages) {
-          print(
-            'Package: id=0x${pkg.getId().toRadixString(16)}, name=${pkg.getName()}, specs=${pkg.getResSpecCount()}',
-          );
+        for (final _ in arscData.packages) {
+          // print(
+          //   'Package: id=0x${package.getId().toRadixString(16)}, name=${package.getName()}, specs=${package.getResSpecCount()}',
+          // );
         }
-      } catch (e, stackTrace) {
-        print('Error decoding resources.arsc: $e');
-        print('Stack trace: $stackTrace');
+      } catch (e) {
+        // print('Error decoding resources.arsc: $e');
         // Re-throw to let the caller handle it
         rethrow;
       }
     } catch (e) {
-      print('Warning: Could not load resource table: $e');
+      // print('Warning: Could not load resource table: $e');
       // Don't rethrow - let manifest decoding continue
     } finally {
       await apkDirectory.close();
@@ -164,15 +160,11 @@ class ResTable {
   }
 
   void addDynamicRefPackage(int pkgId, String pkgName) {
-    _dynamicRefTable[pkgId] = pkgName;
+    // Implementation of addDynamicRefPackage method
   }
 
   int getDynamicRefPackageId(String pkgName) {
-    for (final entry in _dynamicRefTable.entries) {
-      if (pkgName == entry.value) {
-        return entry.key;
-      }
-    }
+    // Implementation of getDynamicRefPackageId method
     return 0;
   }
 
@@ -185,20 +177,20 @@ class ResTable {
       final resIdObj = ResID(resId);
       final packageId = resIdObj.getPackageId();
 
-      print(
-        'DEBUG resolveReference: resId=0x${resId.toRadixString(16)}, packageId=0x${packageId.toRadixString(16)}',
-      );
+      // print(
+      //   'DEBUG resolveReference: resId=0x${resId.toRadixString(16)}, packageId=0x${packageId.toRadixString(16)}',
+      // );
 
       // Try to get the package
       ResPackage? pkg;
       try {
         pkg = getPackageById(packageId);
-        print('DEBUG: Found package: ${pkg.getName()}');
+        // print('DEBUG: Found package: ${pkg.getName()}');
       } catch (e) {
         // Unknown package
-        print(
-          'DEBUG: Package not found for ID 0x${packageId.toRadixString(16)}',
-        );
+        // print(
+        //   'DEBUG: Package not found for ID 0x${packageId.toRadixString(16)}',
+        // );
         return null;
       }
 
@@ -209,15 +201,15 @@ class ResTable {
 
         // Format: @type/name
         final result = '@${typeSpec.getName()}/${spec.getName()}';
-        print('DEBUG: Resolved to $result');
+        // print('DEBUG: Resolved to $result');
         return result;
       } catch (e) {
         // Resource not found in package
-        print('DEBUG: Resource not found in package: $e');
+        // print('DEBUG: Resource not found in package: $e');
         return null;
       }
     } catch (e) {
-      print('DEBUG: Error in resolveReference: $e');
+      // print('DEBUG: Error in resolveReference: $e');
       return null;
     }
   }

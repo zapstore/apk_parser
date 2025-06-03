@@ -1,4 +1,4 @@
-library brut_xmlpull;
+library;
 
 import 'xml_pull_parser.dart'; // For XmlPullParser type
 

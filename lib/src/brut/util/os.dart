@@ -1,7 +1,6 @@
-library brut_util;
+library;
 
 import 'dart:io';
-// import '../common/brut_exception.dart'; // Not needed for the selected methods
 
 // Awaiting https://github.com/dart-lang/language/issues/2751 for top-level static classes
 // For now, use top-level functions or a class with static methods.

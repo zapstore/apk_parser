@@ -1,6 +1,5 @@
-library brut_androlib_res_data_axml;
+library;
 
-import 'dart:typed_data'; // For Int32List if more performant, but List<int> is fine.
 
 class NamespaceStack {
   List<int> _data;

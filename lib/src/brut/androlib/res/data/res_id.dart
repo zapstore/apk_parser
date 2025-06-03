@@ -1,4 +1,4 @@
-library brut_androlib_res_data;
+library;
 
 class ResID {
   final int id;

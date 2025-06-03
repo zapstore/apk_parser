@@ -1,4 +1,4 @@
-library brut_directory;
+library;
 
 class DirectoryException implements Exception {
   final String message;

@@ -1,4 +1,4 @@
-library brut_androlib_res_decoder;
+library;
 
 import 'dart:convert'; // For Utf8Decoder, Utf16leDecoder (not directly available, use utf8, implement manual utf16le)
 import 'dart:typed_data';
@@ -22,8 +22,6 @@ class StringBlock {
 
   late List<int> _stringOffsets;
   late Uint8List _strings;
-  late List<int>? _styleOffsets; // Nullable if no styles
-  late List<int>? _styles; // Nullable if no styles
   late bool _isUtf8;
 
   // Private constructor, use factory methods
@@ -84,12 +82,8 @@ class StringBlock {
     );
 
     if (styleCount != 0) {
-      block._styleOffsets = dei.readSafeIntArray(
-        styleCount,
-        startPosition + stylesOffset,
-      );
-    } else {
-      block._styleOffsets = null;
+      // This case means stylesOffset is invalid or points before strings, implies no style data despite styleCount > 0
+      // This might happen with obfuscated files. Proceed as if no styles.
     }
 
     final bool hasStyles = stylesOffset != 0 && styleCount != 0;
@@ -107,30 +101,6 @@ class StringBlock {
 
     block._strings = dei.readBytes(sizeOfStringsData);
 
-    if (hasStyles && stylesOffset > stringsOffset) {
-      final int sizeOfStylesData = chunkSize - stylesOffset;
-      if (sizeOfStylesData > 0 && (sizeOfStylesData % 4 == 0)) {
-        block._styles = dei.readIntArray(sizeOfStylesData ~/ 4);
-      } else {
-        // Invalid styles data size, or no styles actually present despite offset
-        block._styles = null;
-        if (sizeOfStylesData > 0) {
-          // If size is non-zero but not multiple of 4, skip
-          print(
-            '[StringBlock] Warning: Style data size ($sizeOfStylesData) not a multiple of 4. Skipping styles.',
-          );
-          dei.skipBytes(sizeOfStylesData);
-        }
-      }
-    } else {
-      block._styles = null;
-    }
-
-    // Java version skips remaining bytes if not 4-byte aligned for styles.
-    // Here, if styles were read, readIntArray would handle alignment from ExtDataInput.
-    // If strings data itself was not aligned and styles were absent, ExtDataInput readBytes would get it all.
-    // The main concern is the overall chunk alignment. The chunk reader (AXML or ARSC) should handle advancing to the next chunk.
-
     // Ensure we're positioned at the end of the chunk
     final endPosition = startPosition + chunkSize;
     final currentPos = dei.position();
@@ -146,7 +116,6 @@ class StringBlock {
       return null;
     }
     int offset = _stringOffsets[index];
-    int length;
 
     List<int>
     valResult; // {newOffsetAfterLengthBytes, stringLengthInBytesOrChars}
@@ -164,9 +133,9 @@ class StringBlock {
     final int stringLength = valResult[1];
 
     if (stringStartOffset + stringLength > _strings.length) {
-      print(
-        '[StringBlock] Warning: String $index (offset $stringStartOffset, len $stringLength) extends outside of pool (size ${_strings.length})',
-      );
+      // print(
+      //   '[StringBlock] Warning: String $index (offset $stringStartOffset, len $stringLength) extends outside of pool (size ${_strings.length})',
+      // );
       return null;
     }
 
@@ -216,9 +185,9 @@ class StringBlock {
         // UTF-16LE: lengthInUnits is number of chars, so lengthInBytes = lengthInUnits * 2
         final numBytes = lengthInUnits * 2;
         if (offset + numBytes > _strings.length) {
-          print(
-            '[StringBlock] UTF-16 string (offset $offset, chars $lengthInUnits, bytes $numBytes) extends outside of pool (size ${_strings.length})',
-          );
+          // print(
+          //   '[StringBlock] UTF-16 string (offset $offset, chars $lengthInUnits, bytes $numBytes) extends outside of pool (size ${_strings.length})',
+          // );
           return null;
         }
         // Manual UTF-16LE decoding (dart:convert doesn't have a direct Utf16Decoder)
@@ -230,9 +199,9 @@ class StringBlock {
         return String.fromCharCodes(codeUnits);
       }
     } catch (e) {
-      print(
-        '[StringBlock] Failed to decode string (utf8: $_isUtf8) at offset $offset, length $lengthInUnits: $e',
-      );
+      // print(
+      //   '[StringBlock] Failed to decode string (utf8: $_isUtf8) at offset $offset, length $lengthInUnits: $e',
+      // );
       // Java version tries CESU-8 on UTF-8 failure. Dart's utf8.decode is strict.
       // For now, we don't have a readily available CESU-8 decoder in Dart standard libs.
       return null;
