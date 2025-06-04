@@ -7,81 +7,110 @@ import 'package:xml/xml.dart' as xml_pkg;
 void main() {
   group('ApkDecoder Manifest Decoding', () {
     test(
-      'Decodes chronos.apk AndroidManifest.xml and compares with original',
+      'Decodes AndroidManifest.xml for all APKs and compares with originals',
       () async {
         final projectRoot = Directory.current.parent.path;
-        final apkPath = p.join(projectRoot, 'original', 'chronos.apk');
-        final goldenManifestPath = p.join(
-          projectRoot,
-          'original',
-          'chronos',
-          'AndroidManifest.xml',
-        );
-
-        final apkFile = File(apkPath);
-        final goldenManifestFile = File(goldenManifestPath);
+        final originalDir = Directory(p.join(projectRoot, 'original'));
 
         expect(
-          await apkFile.exists(),
+          await originalDir.exists(),
           isTrue,
-          reason: 'Test APK $apkPath must exist.',
+          reason: 'Original directory must exist.',
         );
+
+        // Get all APK files
+        final apkFiles = await originalDir
+            .list()
+            .where((entity) => entity is File && entity.path.endsWith('.apk'))
+            .cast<File>()
+            .toList();
+
         expect(
-          await goldenManifestFile.exists(),
+          apkFiles.isNotEmpty,
           isTrue,
-          reason: 'Golden AndroidManifest.xml $goldenManifestPath must exist.',
+          reason: 'At least one APK file must exist in original directory.',
         );
 
         final decoder = ApkDecoder();
-        String decodedXmlText = '';
-        String goldenXmlText = '';
 
-        try {
-          decodedXmlText = await decoder.decodeManifestToXmlText(apkPath);
-          goldenXmlText = await goldenManifestFile.readAsString();
-        } catch (e, s) {
-          fail('Exception during manifest decoding or file reading: $e\n$s');
-        }
+        for (final apkFile in apkFiles) {
+          final apkName = p.basenameWithoutExtension(apkFile.path);
+          final goldenManifestPath = p.join(
+            projectRoot,
+            'original',
+            apkName,
+            'AndroidManifest.xml',
+          );
+          final goldenManifestFile = File(goldenManifestPath);
 
-        // Basic validation - does it contain expected tags?
-        expect(
-          decodedXmlText.contains('<manifest'),
-          isTrue,
-          reason: 'Decoded XML should contain <manifest> tag',
-        );
-        expect(
-          decodedXmlText.contains('<application'),
-          isTrue,
-          reason: 'Decoded XML should contain <application> tag',
-        );
-
-        print('--- DECODED AndroidManifest.xml (chronos.apk) ---');
-        print(decodedXmlText);
-        print('--- END DECODED ---');
-
-        // Semantic comparison - parse both with package:xml and compare
-        try {
-          final decodedDoc = xml_pkg.XmlDocument.parse(decodedXmlText);
-          final goldenDoc = xml_pkg.XmlDocument.parse(goldenXmlText);
-
-          // Check root element name
           expect(
-            decodedDoc.rootElement.name.local,
-            equals(goldenDoc.rootElement.name.local),
+            await goldenManifestFile.exists(),
+            isTrue,
+            reason:
+                'Golden AndroidManifest.xml must exist for $apkName at $goldenManifestPath',
           );
 
-          // Check for application tag existence
-          expect(decodedDoc.findAllElements('application').isNotEmpty, isTrue);
-          expect(goldenDoc.findAllElements('application').isNotEmpty, isTrue);
-        } catch (e) {
-          fail('XML parsing of decoded/golden manifest failed: $e');
-        }
+          String decodedXmlText = '';
+          String goldenXmlText = '';
 
-        print(
-          'Test completed. Decoded XML printed above. Semantic checks passed.',
-        );
+          try {
+            decodedXmlText = await decoder.decodeManifestToXmlText(
+              apkFile.path,
+            );
+            goldenXmlText = await goldenManifestFile.readAsString();
+          } catch (e, s) {
+            fail(
+              'Exception during manifest decoding or file reading for $apkName: $e\n$s',
+            );
+          }
+
+          // Basic validation - does it contain expected tags?
+          expect(
+            decodedXmlText.contains('<manifest'),
+            isTrue,
+            reason: 'Decoded XML for $apkName should contain <manifest> tag',
+          );
+          expect(
+            decodedXmlText.contains('<application'),
+            isTrue,
+            reason: 'Decoded XML for $apkName should contain <application> tag',
+          );
+
+          // Semantic comparison - parse both with package:xml and compare
+          try {
+            final decodedDoc = xml_pkg.XmlDocument.parse(decodedXmlText);
+            final goldenDoc = xml_pkg.XmlDocument.parse(goldenXmlText);
+
+            // Check root element name
+            expect(
+              decodedDoc.rootElement.name.local,
+              equals(goldenDoc.rootElement.name.local),
+              reason: 'Root element mismatch for $apkName',
+            );
+
+            // Check for application tag existence
+            expect(
+              decodedDoc.findAllElements('application').isNotEmpty,
+              isTrue,
+              reason:
+                  'Decoded manifest for $apkName should have application element',
+            );
+            expect(
+              goldenDoc.findAllElements('application').isNotEmpty,
+              isTrue,
+              reason:
+                  'Golden manifest for $apkName should have application element',
+            );
+          } catch (e) {
+            fail(
+              'XML parsing of decoded/golden manifest failed for $apkName: $e',
+            );
+          }
+        }
       },
-      timeout: Timeout(Duration(seconds: 60)),
+      timeout: Timeout(
+        Duration(seconds: 300),
+      ), // Increased timeout for multiple APKs
     );
   });
 }
