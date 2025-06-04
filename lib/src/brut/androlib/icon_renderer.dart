@@ -30,12 +30,14 @@ class IconRenderer {
         .replaceAll('@drawable/', '')
         .replaceAll('@mipmap/', '');
 
-    // PRIORITY 1: Try to find existing PNG icons first (before any rasterization)
-    final existingPngPath = await _findExistingPngIcon(iconName, density);
-    if (existingPngPath != null) {
-      print('🖼️  Found existing PNG icon: ${p.basename(existingPngPath)}');
-      return await _scalePngIcon(
-        existingPngPath,
+    // PRIORITY 1: Try to find existing raster icons (PNG, WebP, JPG, etc.) first
+    final existingRasterPath = await _findExistingRasterIcon(iconName, density);
+    if (existingRasterPath != null) {
+      print(
+        '🖼️  Found existing raster icon: ${p.basename(existingRasterPath)}',
+      );
+      return await _convertAndScaleRasterIcon(
+        existingRasterPath,
         iconName,
         targetSize,
         density,
@@ -45,34 +47,26 @@ class IconRenderer {
     // PRIORITY 2: Try adaptive icon (requires rasterization)
     final adaptiveIconPath = await _findAdaptiveIcon(iconName);
     if (adaptiveIconPath != null) {
-      print('⚠️  No existing PNG found, rasterizing adaptive icon...');
+      print('⚠️  No existing raster found, rasterizing adaptive icon...');
       return await _renderAdaptiveIcon(adaptiveIconPath, iconName, targetSize);
     }
 
     // PRIORITY 3: Try vector drawable (requires rasterization)
     final vectorIconPath = await _findVectorDrawable(iconName);
     if (vectorIconPath != null) {
-      print('⚠️  No existing PNG found, rasterizing vector drawable...');
+      print('⚠️  No existing raster found, rasterizing vector drawable...');
       return await _renderVectorDrawable(vectorIconPath, iconName, targetSize);
-    }
-
-    // PRIORITY 4: Final fallback to any density PNG (this shouldn't happen if step 1 worked)
-    final fallbackPngPath = await _findDensityIcon(iconName, density);
-    if (fallbackPngPath != null) {
-      return await _scalePngIcon(
-        fallbackPngPath,
-        iconName,
-        targetSize,
-        density,
-      );
     }
 
     return null;
   }
 
-  /// Find existing PNG icon that exactly matches the icon reference name
-  /// This ensures we get the actual referenced icon, not a random PNG
-  Future<String?> _findExistingPngIcon(String iconName, String density) async {
+  /// Find existing raster icon (PNG, WebP, JPG, etc.) that matches the icon reference name
+  /// This ensures we get the actual referenced icon in any raster format
+  Future<String?> _findExistingRasterIcon(
+    String iconName,
+    String density,
+  ) async {
     // Priority order: higher density first for better quality
     final densityPriority = [
       'xxxhdpi', // 640dpi (4x)
@@ -86,32 +80,37 @@ class IconRenderer {
     // Check both drawable and mipmap directories
     final directoryPrefixes = ['drawable', 'mipmap'];
 
+    // Support common raster formats
+    final rasterFormats = ['png', 'webp', 'jpg', 'jpeg'];
+
     for (final prefix in directoryPrefixes) {
       for (final densityName in densityPriority) {
-        final candidates = [
-          '$prefix-$densityName/$iconName.png',
-          '$prefix/$iconName.png', // No density qualifier
-        ];
+        for (final format in rasterFormats) {
+          final candidates = [
+            '$prefix-$densityName/$iconName.$format',
+            '$prefix/$iconName.$format', // No density qualifier
+          ];
 
-        for (final candidate in candidates) {
-          final path = p.join(_resourceDir, candidate);
-          if (await File(path).exists()) {
-            // Verify this is actually a PNG file by checking file size and basic validation
-            final file = File(path);
-            final stat = await file.stat();
-            if (stat.size > 100) {
-              // Reasonable minimum for an icon PNG
-              print(
-                '✅ Found existing PNG: $candidate (${(stat.size / 1024).toStringAsFixed(1)}KB)',
-              );
-              return path;
+          for (final candidate in candidates) {
+            final path = p.join(_resourceDir, candidate);
+            if (await File(path).exists()) {
+              // Verify this is actually a valid raster file by checking file size
+              final file = File(path);
+              final stat = await file.stat();
+              if (stat.size > 100) {
+                // Reasonable minimum for an icon
+                print(
+                  '✅ Found existing raster: $candidate (${(stat.size / 1024).toStringAsFixed(1)}KB)',
+                );
+                return path;
+              }
             }
           }
         }
       }
     }
 
-    print('📋 No existing PNG found for icon: $iconName');
+    print('📋 No existing raster image found for icon: $iconName');
     return null;
   }
 
@@ -156,34 +155,6 @@ class IconRenderer {
         if (content.contains('<vector')) {
           return path;
         }
-      }
-    }
-    return null;
-  }
-
-  /// Find density-specific PNG icon (check both drawable and mipmap)
-  Future<String?> _findDensityIcon(String iconName, String density) async {
-    final candidates = [
-      'drawable-$density/$iconName.png',
-      'drawable-xxhdpi/$iconName.png',
-      'drawable-xhdpi/$iconName.png',
-      'drawable-hdpi/$iconName.png',
-      'drawable-mdpi/$iconName.png',
-      'drawable-ldpi/$iconName.png',
-      'drawable/$iconName.png',
-      'mipmap-$density/$iconName.png',
-      'mipmap-xxhdpi/$iconName.png',
-      'mipmap-xhdpi/$iconName.png',
-      'mipmap-hdpi/$iconName.png',
-      'mipmap-mdpi/$iconName.png',
-      'mipmap-ldpi/$iconName.png',
-      'mipmap/$iconName.png',
-    ];
-
-    for (final candidate in candidates) {
-      final path = p.join(_resourceDir, candidate);
-      if (await File(path).exists()) {
-        return path;
       }
     }
     return null;
@@ -290,10 +261,10 @@ class IconRenderer {
 
     final drawableName = drawableRef.substring('@drawable/'.length);
 
-    // Try to load as PNG first
-    final pngPath = await _findDensityIcon(drawableName, 'xxhdpi');
-    if (pngPath != null) {
-      final bytes = await File(pngPath).readAsBytes();
+    // Try to load as raster first (PNG, WebP, JPG, etc.)
+    final rasterPath = await _findExistingRasterIcon(drawableName, 'xxhdpi');
+    if (rasterPath != null) {
+      final bytes = await File(rasterPath).readAsBytes();
       final image = img.decodeImage(bytes);
       if (image != null) {
         return img.copyResize(image, width: targetSize, height: targetSize);
@@ -499,58 +470,76 @@ class IconRenderer {
     return coords;
   }
 
-  /// Scale existing PNG icon to target size using pure Dart
-  Future<String> _scalePngIcon(
-    String pngPath,
+  /// Convert and scale existing raster icon (PNG/WebP/JPG) to PNG using pure Dart
+  Future<String> _convertAndScaleRasterIcon(
+    String rasterPath,
     String iconName,
     int targetSize,
     String density,
   ) async {
-    final file = File(pngPath);
+    final file = File(rasterPath);
     final bytes = await file.readAsBytes();
+    final extension = p.extension(rasterPath).toLowerCase();
 
-    print('🎯 Using existing PNG icon: $iconName');
-    print('   Source: ${p.basename(pngPath)} (${bytes.length} bytes)');
+    print('🎯 Using existing raster icon: $iconName');
+    print(
+      '   Source: ${p.basename(rasterPath)} ($extension, ${bytes.length} bytes)',
+    );
 
-    // Decode the PNG to get original dimensions
-    final originalImage = img.decodeImage(bytes);
+    // Decode the image (supports PNG, WebP, JPG, etc.)
+    img.Image? originalImage;
+
+    switch (extension) {
+      case '.png':
+        originalImage = img.decodePng(bytes);
+        break;
+      case '.webp':
+        originalImage = img.decodeWebP(bytes);
+        break;
+      case '.jpg':
+      case '.jpeg':
+        originalImage = img.decodeJpg(bytes);
+        break;
+      default:
+        // Try automatic detection
+        originalImage = img.decodeImage(bytes);
+    }
+
     if (originalImage == null) {
-      throw Exception('Failed to decode PNG: $pngPath');
+      throw Exception('Failed to decode raster image: $rasterPath');
     }
 
     print('   Original size: ${originalImage.width}x${originalImage.height}px');
     print('   Target size: ${targetSize}px');
 
+    // Always convert to PNG format for consistency
+    img.Image finalImage;
+
     // Only resize if necessary
     if (originalImage.width == targetSize &&
         originalImage.height == targetSize) {
-      print('   ✅ Perfect size match - copying original');
-      final outputPath = p.join(
-        Directory.systemTemp.path,
-        '${iconName}_${targetSize}px.png',
+      print('   ✅ Perfect size match - converting format only');
+      finalImage = originalImage;
+    } else {
+      // Resize using high-quality interpolation
+      print('   🔄 Converting and scaling to target size...');
+      finalImage = img.copyResize(
+        originalImage,
+        width: targetSize,
+        height: targetSize,
+        interpolation: img.Interpolation.cubic,
       );
-      await file.copy(outputPath);
-      return outputPath;
     }
-
-    // Resize using high-quality interpolation
-    print('   🔄 Scaling to target size...');
-    final resizedImage = img.copyResize(
-      originalImage,
-      width: targetSize,
-      height: targetSize,
-      interpolation: img.Interpolation.cubic,
-    );
 
     final outputPath = p.join(
       Directory.systemTemp.path,
       '${iconName}_${targetSize}px.png',
     );
 
-    final pngBytes = img.encodePng(resizedImage);
+    final pngBytes = img.encodePng(finalImage);
     await File(outputPath).writeAsBytes(pngBytes);
 
-    print('   ✅ PNG icon scaled and saved: $outputPath');
+    print('   ✅ Raster icon converted to PNG and saved: $outputPath');
     return outputPath;
   }
 
@@ -575,9 +564,9 @@ class IconRenderer {
       return IconInfo(iconName, IconType.vector, vectorIconPath);
     }
 
-    final pngIconPath = await _findDensityIcon(iconName, 'xxhdpi');
-    if (pngIconPath != null) {
-      return IconInfo(iconName, IconType.raster, pngIconPath);
+    final rasterIconPath = await _findExistingRasterIcon(iconName, 'xxhdpi');
+    if (rasterIconPath != null) {
+      return IconInfo(iconName, IconType.raster, rasterIconPath);
     }
 
     return IconInfo(iconName, IconType.notFound, null);
