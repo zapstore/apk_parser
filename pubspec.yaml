@@ -9,8 +9,9 @@ environment:
 # Add regular dependencies here.
 dependencies:
   archive: ^4.0.7
-  path: ^1.9.1
   xml: ^6.5.0
+  path: ^1.9.1
+  image: ^4.1.7
   # path: ^1.8.0
 
 dev_dependencies:
