@@ -1,7 +1,6 @@
 library;
 
 import 'dart:io';
-import 'dart:typed_data';
 import 'directory_exception.dart';
 
 /// Manual ZIP reader implementation for fallback when archive package fails
@@ -266,21 +265,13 @@ class ManualZipReader {
       throw DirectoryException('Invalid central directory entry signature');
     }
 
-    final versionMade = _bytesToUint16(await _file.read(2));
-    final versionNeeded = _bytesToUint16(await _file.read(2));
-    final generalPurposeFlag = _bytesToUint16(await _file.read(2));
     final compressionMethod = _bytesToUint16(await _file.read(2));
-    final lastModTime = _bytesToUint16(await _file.read(2));
-    final lastModDate = _bytesToUint16(await _file.read(2));
     final crc32 = _bytesToUint32(await _file.read(4));
     final compressedSize = _bytesToUint32(await _file.read(4));
     final uncompressedSize = _bytesToUint32(await _file.read(4));
     final fileNameLength = _bytesToUint16(await _file.read(2));
     final extraFieldLength = _bytesToUint16(await _file.read(2));
     final fileCommentLength = _bytesToUint16(await _file.read(2));
-    final diskNumberStart = _bytesToUint16(await _file.read(2));
-    final internalFileAttributes = _bytesToUint16(await _file.read(2));
-    final externalFileAttributes = _bytesToUint32(await _file.read(4));
     final localHeaderOffset = _bytesToUint32(await _file.read(4));
 
     // Read filename

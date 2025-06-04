@@ -84,9 +84,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
   }
 
   Future<FallbackZipDirectory> _getFallbackDirectory() async {
-    if (_fallbackDirectory == null) {
-      _fallbackDirectory = FallbackZipDirectory(_zipExtFile, _zipPathPrefix);
-    }
+    _fallbackDirectory ??= FallbackZipDirectory(_zipExtFile, _zipPathPrefix);
     return _fallbackDirectory!;
   }
 

@@ -1,7 +1,6 @@
 library;
 
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart' as xml;
@@ -11,8 +10,9 @@ import 'package:image/image.dart' as img;
 /// Handles adaptive icons, vector drawables, and legacy PNG resources
 class IconRenderer {
   final String _resourceDir;
+  final bool verbose;
 
-  IconRenderer(this._resourceDir);
+  IconRenderer(this._resourceDir, {this.verbose = false});
 
   /// Get the actual icon that would be displayed on an Android device
   /// Returns the path to the generated icon file
@@ -33,9 +33,11 @@ class IconRenderer {
     // PRIORITY 1: Try to find existing raster icons (PNG, WebP, JPG, etc.) first
     final existingRasterPath = await _findExistingRasterIcon(iconName, density);
     if (existingRasterPath != null) {
-      print(
-        '🖼️  Found existing raster icon: ${p.basename(existingRasterPath)}',
-      );
+      if (verbose) {
+        print(
+          '✅ Found existing raster: ${p.basename(existingRasterPath)} (${await File(existingRasterPath).length() / 1024}KB)',
+        );
+      }
       return await _convertAndScaleRasterIcon(
         existingRasterPath,
         iconName,
@@ -44,20 +46,29 @@ class IconRenderer {
       );
     }
 
-    // PRIORITY 2: Try adaptive icon (requires rasterization)
-    final adaptiveIconPath = await _findAdaptiveIcon(iconName);
+    // PRIORITY 2: Try adaptive icon (background + foreground)
+    final adaptiveIconPath = await _renderAdaptiveIcon(
+      iconName,
+      targetSize,
+      density,
+    );
     if (adaptiveIconPath != null) {
-      print('⚠️  No existing raster found, rasterizing adaptive icon...');
-      return await _renderAdaptiveIcon(adaptiveIconPath, iconName, targetSize);
+      if (verbose) print('🎨 Generated adaptive icon');
+      return adaptiveIconPath;
     }
 
-    // PRIORITY 3: Try vector drawable (requires rasterization)
-    final vectorIconPath = await _findVectorDrawable(iconName);
+    // PRIORITY 3: Try vector drawable
+    final vectorIconPath = await _renderVectorDrawable(
+      iconName,
+      targetSize,
+      density,
+    );
     if (vectorIconPath != null) {
-      print('⚠️  No existing raster found, rasterizing vector drawable...');
-      return await _renderVectorDrawable(vectorIconPath, iconName, targetSize);
+      if (verbose) print('🖼️  Generated vector icon');
+      return vectorIconPath;
     }
 
+    if (verbose) print('❌ No suitable icon found for $iconReference');
     return null;
   }
 
@@ -99,9 +110,11 @@ class IconRenderer {
               final stat = await file.stat();
               if (stat.size > 100) {
                 // Reasonable minimum for an icon
-                print(
-                  '✅ Found existing raster: $candidate (${(stat.size / 1024).toStringAsFixed(1)}KB)',
-                );
+                if (verbose) {
+                  print(
+                    '✅ Found existing raster: $candidate (${(stat.size / 1024).toStringAsFixed(1)}KB)',
+                  );
+                }
                 return path;
               }
             }
@@ -110,7 +123,7 @@ class IconRenderer {
       }
     }
 
-    print('📋 No existing raster image found for icon: $iconName');
+    if (verbose) print('📋 No existing raster image found for icon: $iconName');
     return null;
   }
 
@@ -161,12 +174,17 @@ class IconRenderer {
   }
 
   /// Render adaptive icon by compositing background + foreground using pure Dart
-  Future<String> _renderAdaptiveIcon(
-    String xmlPath,
+  Future<String?> _renderAdaptiveIcon(
     String iconName,
     int size,
+    String density,
   ) async {
-    final content = await File(xmlPath).readAsString();
+    final adaptiveIconPath = await _findAdaptiveIcon(iconName);
+    if (adaptiveIconPath == null) {
+      return null;
+    }
+
+    final content = await File(adaptiveIconPath).readAsString();
     final doc = xml.XmlDocument.parse(content);
 
     final backgroundRef = doc.rootElement
@@ -179,9 +197,9 @@ class IconRenderer {
         .first
         .getAttribute('android:drawable');
 
-    print('🎨 Rasterizing adaptive icon: $iconName');
-    print('   Background: $backgroundRef');
-    print('   Foreground: $foregroundRef');
+    if (verbose) print('🎨 Rasterizing adaptive icon: $iconName');
+    if (verbose) print('   Background: $backgroundRef');
+    if (verbose) print('   Foreground: $foregroundRef');
 
     // Load background layer
     img.Image? backgroundImg;
@@ -231,23 +249,28 @@ class IconRenderer {
       );
     }
 
-    // Keep square shape (no circular mask)
-    // Note: Android adaptive icons can be shaped differently per device/launcher
-    // but square is the most universal and preserves the full design
-
-    // Save as PNG
-    final outputPath = p.join(
+    // Save as PNG first, then try to convert to WEBP
+    final pngPath = p.join(
       Directory.systemTemp.path,
       '${iconName}_adaptive_${size}px.png',
     );
 
     final pngBytes = img.encodePng(composite);
-    await File(outputPath).writeAsBytes(pngBytes);
+    await File(pngPath).writeAsBytes(pngBytes);
 
-    print(
-      '   ✅ Adaptive icon rasterized and saved: $outputPath (square format)',
+    // Try to convert to WEBP, fall back to PNG if ffmpeg not available
+    final finalPath = await _convertToWebpOrFallback(
+      pngPath,
+      '${iconName}_adaptive',
+      size,
     );
-    return outputPath;
+
+    if (verbose) {
+      print(
+        '   ✅ Adaptive icon rasterized and saved: ${p.basename(finalPath)} (square format)',
+      );
+    }
+    return finalPath;
   }
 
   /// Load a drawable reference as an image
@@ -280,35 +303,31 @@ class IconRenderer {
     return null;
   }
 
-  /// Render vector drawable to image using pure Dart
-  Future<String> _renderVectorDrawable(
-    String xmlPath,
+  /// Render vector drawable to raster using pure Dart
+  Future<String?> _renderVectorDrawable(
     String iconName,
     int size,
+    String density,
   ) async {
-    final image = await _renderVectorToImage(xmlPath, size);
-    if (image == null) {
-      throw Exception('Failed to render vector drawable: $iconName');
+    final vectorPath = await _findVectorDrawable(iconName);
+    if (vectorPath == null) {
+      return null;
     }
 
-    final outputPath = p.join(
-      Directory.systemTemp.path,
-      '${iconName}_vector_${size}px.png',
-    );
-
-    final pngBytes = img.encodePng(image);
-    await File(outputPath).writeAsBytes(pngBytes);
-
-    print('   ✅ Vector drawable rasterized and saved: $outputPath');
-    return outputPath;
-  }
-
-  /// Render vector XML to image
-  Future<img.Image?> _renderVectorToImage(String xmlPath, int size) async {
-    final content = await File(xmlPath).readAsString();
+    final content = await File(vectorPath).readAsString();
     final doc = xml.XmlDocument.parse(content);
 
-    final vectorElement = doc.findAllElements('vector').first;
+    if (verbose) print('🎨 Rasterizing vector drawable: $iconName');
+
+    // Create image canvas
+    final image = img.Image(width: size, height: size);
+    img.fill(
+      image,
+      color: img.ColorRgba8(0, 0, 0, 0),
+    ); // Transparent background
+
+    // Parse vector attributes
+    final vectorElement = doc.rootElement;
     final viewportWidth =
         double.tryParse(
           vectorElement.getAttribute('android:viewportWidth') ?? '24',
@@ -320,40 +339,82 @@ class IconRenderer {
         ) ??
         24.0;
 
-    print('🎨 Rasterizing vector drawable to ${size}x${size}px');
-    print('   Viewport: ${viewportWidth}x$viewportHeight');
+    // Calculate scaling factor
+    final scaleX = size / viewportWidth;
+    final scaleY = size / viewportHeight;
 
-    // Create image
-    final image = img.Image(width: size, height: size);
-    img.fill(
-      image,
-      color: img.ColorRgba8(0, 0, 0, 0),
-    ); // Transparent background
+    if (verbose) {
+      print('   Viewport: ${viewportWidth}x$viewportHeight');
+      print(
+        '   Scale: ${scaleX.toStringAsFixed(2)}x${scaleY.toStringAsFixed(2)}',
+      );
+    }
 
-    // Extract and render paths
-    final paths = doc.findAllElements('path');
-    print('   Rendering ${paths.length} vector paths');
-
-    for (final pathElement in paths) {
-      final fillColorStr = pathElement.getAttribute('android:fillColor');
+    // Parse and render paths
+    var pathCount = 0;
+    for (final pathElement in vectorElement.findAllElements('path')) {
       final pathData = pathElement.getAttribute('android:pathData');
+      final fillColor =
+          pathElement.getAttribute('android:fillColor') ?? '#000000';
 
-      if (fillColorStr != null && pathData != null) {
-        final color = _parseColor(fillColorStr);
-        if (color != null) {
-          _renderSimplePath(
+      if (pathData != null) {
+        pathCount++;
+        if (verbose) print('   Path $pathCount: $fillColor');
+
+        // Parse color
+        final color = _parseColor(fillColor);
+        if (color == null) continue;
+
+        // Extract coordinates from path data (simplified)
+        final coords = _extractCoordinates(pathData);
+
+        // Render based on path type (simplified rendering)
+        if (coords.length >= 4) {
+          // Simple rectangle/shape rendering
+          final x1 = (coords[0] * scaleX).round().clamp(0, size - 1);
+          final y1 = (coords[1] * scaleY).round().clamp(0, size - 1);
+          final x2 = (coords[2] * scaleX).round().clamp(0, size - 1);
+          final y2 = (coords[3] * scaleY).round().clamp(0, size - 1);
+
+          // Draw filled rectangle as approximation
+          img.fillRect(image, x1: x1, y1: y1, x2: x2, y2: y2, color: color);
+        } else if (coords.length >= 6) {
+          // Draw circle if we have center + radius-like coordinates
+          final centerX = (coords[0] * scaleX).round().clamp(0, size - 1);
+          final centerY = (coords[1] * scaleY).round().clamp(0, size - 1);
+          final radius = ((coords[2] * scaleX + coords[3] * scaleY) / 2)
+              .round();
+
+          img.fillCircle(
             image,
-            pathData,
-            color,
-            viewportWidth,
-            viewportHeight,
-            size,
+            x: centerX,
+            y: centerY,
+            radius: radius,
+            color: color,
           );
         }
       }
     }
 
-    return image;
+    // Save as PNG first, then try to convert to WEBP
+    final pngPath = p.join(
+      Directory.systemTemp.path,
+      '${iconName}_vector_${size}px.png',
+    );
+    final pngBytes = img.encodePng(image);
+    await File(pngPath).writeAsBytes(pngBytes);
+
+    // Try to convert to WEBP, fall back to PNG if ffmpeg not available
+    final finalPath = await _convertToWebpOrFallback(
+      pngPath,
+      '${iconName}_vector',
+      size,
+    );
+
+    if (verbose) {
+      print('   ✅ Vector drawable rasterized: ${p.basename(finalPath)}');
+    }
+    return finalPath;
   }
 
   /// Parse Android color string to image Color
@@ -481,10 +542,12 @@ class IconRenderer {
     final bytes = await file.readAsBytes();
     final extension = p.extension(rasterPath).toLowerCase();
 
-    print('🎯 Using existing raster icon: $iconName');
-    print(
-      '   Source: ${p.basename(rasterPath)} ($extension, ${bytes.length} bytes)',
-    );
+    if (verbose) {
+      print('🎯 Using existing raster icon: $iconName');
+      print(
+        '   Source: ${p.basename(rasterPath)} ($extension, ${bytes.length} bytes)',
+      );
+    }
 
     // Decode the image (supports PNG, WebP, JPG, etc.)
     img.Image? originalImage;
@@ -509,8 +572,12 @@ class IconRenderer {
       throw Exception('Failed to decode raster image: $rasterPath');
     }
 
-    print('   Original size: ${originalImage.width}x${originalImage.height}px');
-    print('   Target size: ${targetSize}px');
+    if (verbose) {
+      print(
+        '   Original size: ${originalImage.width}x${originalImage.height}px',
+      );
+      print('   Target size: ${targetSize}px');
+    }
 
     // Always convert to PNG format for consistency
     img.Image finalImage;
@@ -518,11 +585,15 @@ class IconRenderer {
     // Only resize if necessary
     if (originalImage.width == targetSize &&
         originalImage.height == targetSize) {
-      print('   ✅ Perfect size match - converting format only');
+      if (verbose) {
+        print('   ✅ Perfect size match - converting format only');
+      }
       finalImage = originalImage;
     } else {
       // Resize using high-quality interpolation
-      print('   🔄 Converting and scaling to target size...');
+      if (verbose) {
+        print('   🔄 Converting and scaling to target size...');
+      }
       finalImage = img.copyResize(
         originalImage,
         width: targetSize,
@@ -531,16 +602,82 @@ class IconRenderer {
       );
     }
 
-    final outputPath = p.join(
+    final pngPath = p.join(
       Directory.systemTemp.path,
       '${iconName}_${targetSize}px.png',
     );
 
     final pngBytes = img.encodePng(finalImage);
-    await File(outputPath).writeAsBytes(pngBytes);
+    await File(pngPath).writeAsBytes(pngBytes);
 
-    print('   ✅ Raster icon converted to PNG and saved: $outputPath');
-    return outputPath;
+    // Try to convert to WEBP, fall back to PNG if ffmpeg not available
+    final finalPath = await _convertToWebpOrFallback(
+      pngPath,
+      iconName,
+      targetSize,
+    );
+
+    if (verbose) {
+      print('   ✅ Raster icon converted and saved: ${p.basename(finalPath)}');
+    }
+    return finalPath;
+  }
+
+  /// Render vector XML to image
+  Future<img.Image?> _renderVectorToImage(String xmlPath, int size) async {
+    final content = await File(xmlPath).readAsString();
+    final doc = xml.XmlDocument.parse(content);
+
+    final vectorElement = doc.findAllElements('vector').first;
+    final viewportWidth =
+        double.tryParse(
+          vectorElement.getAttribute('android:viewportWidth') ?? '24',
+        ) ??
+        24.0;
+    final viewportHeight =
+        double.tryParse(
+          vectorElement.getAttribute('android:viewportHeight') ?? '24',
+        ) ??
+        24.0;
+
+    if (verbose) {
+      print('🎨 Rasterizing vector drawable to ${size}x${size}px');
+      print('   Viewport: ${viewportWidth}x$viewportHeight');
+    }
+
+    // Create image
+    final image = img.Image(width: size, height: size);
+    img.fill(
+      image,
+      color: img.ColorRgba8(0, 0, 0, 0),
+    ); // Transparent background
+
+    // Extract and render paths
+    final paths = doc.findAllElements('path');
+    if (verbose) {
+      print('   Rendering ${paths.length} vector paths');
+    }
+
+    for (final pathElement in paths) {
+      final fillColorStr = pathElement.getAttribute('android:fillColor');
+      final pathData = pathElement.getAttribute('android:pathData');
+
+      if (fillColorStr != null && pathData != null) {
+        final color = _parseColor(fillColorStr);
+        if (color != null) {
+          _renderSimplePath(
+            image,
+            pathData,
+            color,
+            viewportWidth,
+            viewportHeight,
+            size,
+          );
+        }
+      }
+    }
+
+    return image;
   }
 
   /// Get icon information without rendering
@@ -570,6 +707,55 @@ class IconRenderer {
     }
 
     return IconInfo(iconName, IconType.notFound, null);
+  }
+
+  /// Try to convert PNG to WEBP using ffmpeg, fall back to PNG if not available
+  Future<String> _convertToWebpOrFallback(
+    String pngPath,
+    String iconName,
+    int size,
+  ) async {
+    try {
+      final webpPath = p.join(
+        Directory.systemTemp.path,
+        '${iconName}_${size}px.webp',
+      );
+
+      // Try to convert PNG to WEBP using ffmpeg
+      final result = await Process.run('ffmpeg', [
+        '-i', pngPath,
+        '-y', // Overwrite output file
+        '-q:v', '90', // Quality setting (0-100, higher is better)
+        webpPath,
+      ], runInShell: true);
+
+      if (result.exitCode == 0 && await File(webpPath).exists()) {
+        // WEBP conversion successful
+        final webpSize = await File(webpPath).length();
+        final pngSize = await File(pngPath).length();
+
+        if (verbose) {
+          print(
+            '   ✅ Converted to WEBP: ${p.basename(webpPath)} (${(webpSize / 1024).toStringAsFixed(1)}KB vs ${(pngSize / 1024).toStringAsFixed(1)}KB PNG)',
+          );
+        }
+
+        // Clean up temporary PNG file
+        try {
+          await File(pngPath).delete();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+
+        return webpPath;
+      } else {
+        if (verbose) print('   ⚠️  WEBP conversion failed, using PNG');
+        return pngPath;
+      }
+    } catch (e) {
+      if (verbose) print('   ⚠️  ffmpeg not available, using PNG format');
+      return pngPath;
+    }
   }
 }
 

@@ -1,6 +1,5 @@
 library;
 
-import 'dart:collection';
 import 'dart:typed_data';
 
 import 'ext_file.dart';
@@ -19,7 +18,7 @@ class FallbackZipDirectory extends AbstractDirectoryBase {
   // Cache for loaded files and directories
   bool _filesLoaded = false;
   bool _dirsLoaded = false;
-  final Set<String> _lazyFiles = LinkedHashSet<String>();
+  final Set<String> _lazyFiles = <String>{};
   final Map<String, AbstractDirectoryBase> _lazyDirs =
       <String, AbstractDirectoryBase>{};
 
@@ -76,7 +75,7 @@ class FallbackZipDirectory extends AbstractDirectoryBase {
 
   @override
   Set<String> loadInitialFiles() {
-    return LinkedHashSet<String>();
+    return <String>{};
   }
 
   @override

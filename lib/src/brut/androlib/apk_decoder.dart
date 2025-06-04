@@ -3,16 +3,13 @@ library;
 import 'dart:async';
 import 'dart:io' as dart_io;
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:path/path.dart' as p;
-import 'package:archive/archive.dart';
 import 'package:xml/xml.dart' as xml;
 import 'package:apktool_dart/src/brut/androlib/icon_renderer.dart';
 
 import '../directory/directory.dart';
 import '../directory/ext_file.dart';
-import '../directory/zip_ro_directory.dart';
 import 'res/data/res_table.dart';
 import 'res/decoder/axml_resource_parser.dart';
 import 'res/decoder/manifest_xml_serializer.dart';
@@ -107,10 +104,6 @@ class ApkDecoder {
           }
         }
       }
-
-      print(
-        'Built resource file mapping with ${resFileMapping.length} entries',
-      );
 
       // Process all files in APK (not just mapped ones)
       final files = apkDirectory.getFiles();
@@ -231,11 +224,8 @@ class ApkDecoder {
       throw FileSystemException('APK file not found', apkPath);
     }
 
-    print('🔍 Analyzing APK: ${p.basename(apkPath)}');
-
     try {
       // 1. Decode manifest using existing method
-      print('📱 Decoding manifest...');
       final manifestXml = await decodeManifestToXmlText(apkPath);
       final manifestDoc = xml.XmlDocument.parse(manifestXml);
       final manifestElement = manifestDoc.rootElement;
@@ -247,9 +237,6 @@ class ApkDecoder {
       final versionCode =
           manifestElement.getAttribute('android:versionCode') ?? 'unknown';
 
-      print('📦 Package: $packageId');
-      print('🏷️  Version: $versionName ($versionCode)');
-
       // Extract SDK versions
       final usesSdkElement = manifestDoc
           .findAllElements('uses-sdk')
@@ -258,8 +245,6 @@ class ApkDecoder {
           usesSdkElement?.getAttribute('android:minSdkVersion') ?? 'unknown';
       final targetSdkVersion =
           usesSdkElement?.getAttribute('android:targetSdkVersion') ?? 'unknown';
-
-      print('🎯 SDK: min=$minSdkVersion, target=$targetSdkVersion');
 
       // Extract permissions
       final permissions = <String>[];
@@ -272,8 +257,6 @@ class ApkDecoder {
         }
       }
 
-      print('🔒 Permissions: ${permissions.length}');
-
       // Extract icon reference
       final applicationElement = manifestDoc
           .findAllElements('application')
@@ -283,7 +266,6 @@ class ApkDecoder {
           applicationElement?.getAttribute('icon');
 
       // 2. Load resource table for app name resolution
-      print('📚 Loading resource table...');
       final resTable = await _getResTable(apkPath);
 
       // 3. Get app name from string resources
@@ -298,41 +280,24 @@ class ApkDecoder {
           // Look up string resource in the main package
           final mainPackage = resTable.getMainPackage();
           final stringType = mainPackage.getType('string');
-          if (stringType != null) {
-            final stringSpec = stringType.getResSpec(stringName);
-            if (stringSpec != null) {
-              final resource = stringSpec.getDefaultResource();
-              if (resource != null) {
-                final value = resource.getValue();
-                if (value is ResStringValue) {
-                  appName = value.value;
-                }
-              }
-            }
+          final stringSpec = stringType.getResSpec(stringName);
+          final resource = stringSpec.getDefaultResource();
+          final value = resource.getValue();
+          if (value is ResStringValue) {
+            appName = value.value;
           }
         } catch (e) {
-          print('⚠️  Could not resolve app label: $e');
+          // print('⚠️  Could not resolve app label: $e');
         }
       } else if (appLabelRef != null && !appLabelRef.startsWith('@')) {
         // Direct string value
         appName = appLabelRef;
       }
 
-      print('📛 App name: $appName');
-
       // 4. Get best icon as base64
       String? iconBase64;
       if (iconRef != null) {
-        print('🎨 Processing icon: $iconRef');
         iconBase64 = await _getIconAsBase64(apkPath, iconRef);
-      }
-
-      if (iconBase64 != null) {
-        print(
-          '✅ Icon extracted (${(iconBase64.length * 0.75 / 1024).toStringAsFixed(1)}KB)',
-        );
-      } else {
-        print('⚠️  No icon extracted');
       }
 
       // 5. Build result JSON
@@ -345,13 +310,11 @@ class ApkDecoder {
         'targetSdkVersion': targetSdkVersion,
         'permissions': permissions,
         'iconBase64': iconBase64,
-        'analysisTimestamp': DateTime.now().toIso8601String(),
       };
 
-      print('🎉 Analysis completed successfully!');
       return result;
     } catch (e) {
-      print('❌ Analysis failed: $e');
+      // print('❌ Analysis failed: $e');
       rethrow;
     }
   }
@@ -371,12 +334,9 @@ class ApkDecoder {
       final resourceDir = dart_io.Directory(p.join(tempDir.path, 'res'));
 
       // Use IconRenderer to get the best icon
-      final iconRenderer = IconRenderer(resourceDir.path);
+      final iconRenderer = IconRenderer(resourceDir.path, verbose: false);
 
-      final renderedIconPath = await iconRenderer.renderIcon(
-        iconRef,
-        targetSize: 192,
-      );
+      final renderedIconPath = await iconRenderer.renderIcon(iconRef);
 
       if (renderedIconPath == null) {
         await tempDir.delete(recursive: true);
@@ -394,44 +354,6 @@ class ApkDecoder {
     } catch (e) {
       print('⚠️  Icon processing failed: $e');
       return null;
-    }
-  }
-
-  /// Extract a single file from the APK
-  Future<void> _extractSingleFile(
-    Directory apkDirectory,
-    String fileName,
-    String outputDir,
-  ) async {
-    try {
-      final outputPath = p.join(
-        outputDir,
-        fileName.substring(4),
-      ); // Remove 'res/' prefix
-      final outputFile = dart_io.File(outputPath);
-
-      // Skip if already extracted
-      if (await outputFile.exists()) {
-        return;
-      }
-
-      await outputFile.parent.create(recursive: true);
-
-      // Copy the file
-      final inputStream = await apkDirectory.getFileInput(fileName);
-      final outputSink = outputFile.openWrite();
-
-      try {
-        await for (final chunk in inputStream.asStream()) {
-          outputSink.add(chunk);
-        }
-      } finally {
-        await outputSink.close();
-        await inputStream.close();
-      }
-    } catch (e) {
-      // Ignore extraction errors for individual files
-      print('⚠️  Could not extract $fileName: $e');
     }
   }
 }
