@@ -36,6 +36,7 @@ void main() {
               .findAllElements('application')
               .firstOrNull;
           final iconAttr =
+              applicationElement?.getAttribute('icon') ??
               applicationElement?.getAttribute('icon', namespace: 'android') ??
               applicationElement?.getAttribute('android:icon');
 
@@ -92,6 +93,7 @@ void main() {
       final doc = xml.XmlDocument.parse(manifestContent);
       final applicationElement = doc.findAllElements('application').firstOrNull;
       final iconAttr =
+          applicationElement?.getAttribute('icon') ??
           applicationElement?.getAttribute('icon', namespace: 'android') ??
           applicationElement?.getAttribute('android:icon');
 
@@ -148,6 +150,7 @@ void main() {
       final doc = xml.XmlDocument.parse(decodedXml);
       final applicationElement = doc.findAllElements('application').first;
       final iconAttr =
+          applicationElement.getAttribute('icon') ??
           applicationElement.getAttribute('icon', namespace: 'android') ??
           applicationElement.getAttribute('android:icon');
 
@@ -156,6 +159,7 @@ void main() {
       final goldenDoc = xml.XmlDocument.parse(goldenXml);
       final goldenApp = goldenDoc.findAllElements('application').first;
       final goldenIcon =
+          goldenApp.getAttribute('icon') ??
           goldenApp.getAttribute('icon', namespace: 'android') ??
           goldenApp.getAttribute('android:icon');
 
