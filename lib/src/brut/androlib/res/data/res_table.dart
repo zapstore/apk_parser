@@ -177,20 +177,12 @@ class ResTable {
       final resIdObj = ResID(resId);
       final packageId = resIdObj.getPackageId();
 
-      // print(
-      //   'DEBUG resolveReference: resId=0x${resId.toRadixString(16)}, packageId=0x${packageId.toRadixString(16)}',
-      // );
-
       // Try to get the package
       ResPackage? pkg;
       try {
         pkg = getPackageById(packageId);
-        // print('DEBUG: Found package: ${pkg.getName()}');
       } catch (e) {
         // Unknown package
-        // print(
-        //   'DEBUG: Package not found for ID 0x${packageId.toRadixString(16)}',
-        // );
         return null;
       }
 
@@ -201,15 +193,12 @@ class ResTable {
 
         // Format: @type/name
         final result = '@${typeSpec.getName()}/${spec.getName()}';
-        // print('DEBUG: Resolved to $result');
         return result;
       } catch (e) {
         // Resource not found in package
-        // print('DEBUG: Resource not found in package: $e');
         return null;
       }
     } catch (e) {
-      // print('DEBUG: Error in resolveReference: $e');
       return null;
     }
   }

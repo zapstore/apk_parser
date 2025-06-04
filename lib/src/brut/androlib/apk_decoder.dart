@@ -20,21 +20,18 @@ import 'res/data/value/res_value.dart';
 // For now, let's ensure it's available for AXmlResourceParser
 
 class ApkDecoder {
-  ResTable? _resTable;
-
   ApkDecoder();
 
   Future<ResTable> _getResTable(String apkPath) async {
-    if (_resTable == null) {
-      _resTable = ResTable();
-      try {
-        await _resTable!.loadMainPackage(apkPath);
-      } catch (e) {
-        print('Warning: Could not load resource table: $e');
-        // Continue without resource resolution
-      }
+    // Always create a fresh ResTable to avoid caching issues
+    final resTable = ResTable();
+    try {
+      await resTable.loadMainPackage(apkPath);
+    } catch (e) {
+      print('Warning: Could not load resource table: $e');
+      // Continue without resource resolution
     }
-    return _resTable!;
+    return resTable;
   }
 
   Future<void> decode(String apkPath, String outputDir) async {
@@ -274,24 +271,42 @@ class ApkDecoder {
           applicationElement?.getAttribute('android:label') ??
           applicationElement?.getAttribute('label');
 
-      if (appLabelRef != null && appLabelRef.startsWith('@string/')) {
-        final stringName = appLabelRef.substring('@string/'.length);
-        try {
-          // Look up string resource in the main package
-          final mainPackage = resTable.getMainPackage();
-          final stringType = mainPackage.getType('string');
-          final stringSpec = stringType.getResSpec(stringName);
-          final resource = stringSpec.getDefaultResource();
-          final value = resource.getValue();
-          if (value is ResStringValue) {
-            appName = value.value;
+      if (appLabelRef != null) {
+        String? resolvedRef = appLabelRef;
+
+        // Handle hex resource IDs like @0x7f12001d
+        if (appLabelRef.startsWith('@0x')) {
+          try {
+            final hexStr = appLabelRef.substring(3); // Remove '@0x'
+            final resId = int.parse(hexStr, radix: 16);
+            resolvedRef = resTable.resolveReference(resId);
+          } catch (e) {
+            // Could not parse resource ID, continue with original value
           }
-        } catch (e) {
-          // print('⚠️  Could not resolve app label: $e');
         }
-      } else if (appLabelRef != null && !appLabelRef.startsWith('@')) {
-        // Direct string value
-        appName = appLabelRef;
+
+        // Now handle the resolved reference
+        if (resolvedRef != null) {
+          if (resolvedRef.startsWith('@string/')) {
+            final stringName = resolvedRef.substring('@string/'.length);
+            try {
+              // Look up string resource in the main package
+              final mainPackage = resTable.getMainPackage();
+              final stringType = mainPackage.getType('string');
+              final stringSpec = stringType.getResSpec(stringName);
+              final resource = stringSpec.getDefaultResource();
+              final value = resource.getValue();
+              if (value is ResStringValue) {
+                appName = value.value;
+              }
+            } catch (e) {
+              // Could not resolve string resource, keep fallback
+            }
+          } else if (!resolvedRef.startsWith('@')) {
+            // Direct string value
+            appName = resolvedRef;
+          }
+        }
       }
 
       // 4. Get best icon as base64
