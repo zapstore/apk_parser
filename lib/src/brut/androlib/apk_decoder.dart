@@ -396,6 +396,7 @@ class ApkDecoder {
       String? resolvedIconPath = await _resolveIconToFilePath(
         resTable,
         iconRef,
+        apkPath,
       );
 
       if (resolvedIconPath != null) {
@@ -426,6 +427,7 @@ class ApkDecoder {
   Future<String?> _resolveIconToFilePath(
     ResTable resTable,
     String iconRef,
+    String apkPath,
   ) async {
     try {
       if (!iconRef.startsWith('@mipmap/') &&
@@ -459,12 +461,19 @@ class ApkDecoder {
 
         String? bestIconPath;
         int bestDensity = 0;
+        String? adaptiveIconXmlPath;
 
-        // Look through all resources in this spec to find the highest density raster image
+        // Look through all resources in this spec to find the highest density raster image or adaptive icon
         for (final resource in iconSpec.listResources()) {
           final value = resource.getValue();
           if (value is ResFileValue) {
             final filePath = value.toString();
+
+            // Check if it's an adaptive icon XML file (API 26+)
+            if (filePath.toLowerCase().endsWith('.xml')) {
+              adaptiveIconXmlPath = filePath;
+              continue;
+            }
 
             // Check if it's a raster image format
             if (filePath.toLowerCase().endsWith('.png') ||
@@ -498,8 +507,21 @@ class ApkDecoder {
           }
         }
 
+        // If we found a raster image, return it
         if (bestIconPath != null) {
           return bestIconPath;
+        }
+
+        // If we found an adaptive icon XML, try to extract the best drawable from it
+        if (adaptiveIconXmlPath != null) {
+          final extractedIcon = await _extractIconFromAdaptiveXml(
+            resTable,
+            adaptiveIconXmlPath,
+            apkPath,
+          );
+          if (extractedIcon != null) {
+            return extractedIcon;
+          }
         }
       } catch (e) {
         // Resource not found, continue
@@ -751,6 +773,191 @@ class ApkDecoder {
       }
 
       return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Extract icon from adaptive icon XML by parsing the XML and resolving drawable references
+  Future<String?> _extractIconFromAdaptiveXml(
+    ResTable resTable,
+    String xmlPath,
+    String apkPath,
+  ) async {
+    try {
+      // Extract the XML file from the APK
+      final xmlBytes = await _extractFileFromApk(apkPath, xmlPath);
+      if (xmlBytes == null) {
+        return null;
+      }
+
+      // Try to decode the XML (it might be binary XML)
+      String xmlContent;
+      try {
+        // Try to decode as binary XML first
+        final tempStream = Stream.fromIterable([xmlBytes]);
+        final xmlParser = AXmlResourceParser(resTable);
+        await xmlParser.setInput(tempStream, null);
+
+        final serializer = ManifestXmlSerializer(xmlParser);
+        xmlContent = await serializer.buildXmlDocumentToString();
+        await xmlParser.close();
+      } catch (e) {
+        // If binary XML parsing fails, try as plain text
+        xmlContent = String.fromCharCodes(xmlBytes);
+      }
+
+      // Parse the XML to find drawable references
+      final xmlDoc = xml.XmlDocument.parse(xmlContent);
+      final adaptiveIconElement = xmlDoc
+          .findAllElements('adaptive-icon')
+          .firstOrNull;
+
+      if (adaptiveIconElement == null) {
+        return null;
+      }
+
+      // Look for drawable references, prioritizing @mipmap references
+      final drawableRefs = <String>[];
+
+      // Check foreground first
+      final foregroundElement = adaptiveIconElement
+          .findAllElements('foreground')
+          .firstOrNull;
+      if (foregroundElement != null) {
+        final drawable =
+            foregroundElement.getAttribute('android:drawable') ??
+            foregroundElement.getAttribute('drawable');
+        if (drawable != null) {
+          drawableRefs.add(drawable);
+        }
+      }
+
+      // Check background as fallback
+      final backgroundElement = adaptiveIconElement
+          .findAllElements('background')
+          .firstOrNull;
+      if (backgroundElement != null) {
+        final drawable =
+            backgroundElement.getAttribute('android:drawable') ??
+            backgroundElement.getAttribute('drawable');
+        if (drawable != null) {
+          drawableRefs.add(drawable);
+        }
+      }
+
+      // Prioritize @mipmap references over @drawable references
+      drawableRefs.sort((a, b) {
+        if (a.startsWith('@mipmap/') && !b.startsWith('@mipmap/')) {
+          return -1; // a comes first
+        } else if (!a.startsWith('@mipmap/') && b.startsWith('@mipmap/')) {
+          return 1; // b comes first
+        }
+        return 0; // same priority
+      });
+
+      // Try to resolve each drawable reference to a raster image
+      for (final drawableRef in drawableRefs) {
+        if (drawableRef.startsWith('@mipmap/') ||
+            drawableRef.startsWith('@drawable/')) {
+          final resolvedPath = await _resolveDrawableToRasterPath(
+            resTable,
+            drawableRef,
+          );
+          if (resolvedPath != null) {
+            return resolvedPath;
+          }
+        }
+      }
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Resolve a drawable reference to the highest quality raster image path
+  Future<String?> _resolveDrawableToRasterPath(
+    ResTable resTable,
+    String drawableRef,
+  ) async {
+    try {
+      if (!drawableRef.startsWith('@mipmap/') &&
+          !drawableRef.startsWith('@drawable/')) {
+        return null;
+      }
+
+      final resourceName = drawableRef.startsWith('@mipmap/')
+          ? drawableRef.substring('@mipmap/'.length)
+          : drawableRef.substring('@drawable/'.length);
+      final resourceType = drawableRef.startsWith('@mipmap/')
+          ? 'mipmap'
+          : 'drawable';
+
+      final mainPackage = resTable.getMainPackage();
+
+      try {
+        final drawableType = mainPackage.getType(resourceType);
+        final drawableSpec = drawableType.getResSpec(resourceName);
+
+        // Find the highest density raster image
+        final Map<String, int> densityPriority = {
+          'xxxhdpi': 640, // 4x
+          'xxhdpi': 480, // 3x
+          'xhdpi': 320, // 2x
+          'hdpi': 240, // 1.5x
+          'mdpi': 160, // 1x (baseline)
+          'ldpi': 120, // 0.75x
+          '': 160, // Default density if no qualifier
+        };
+
+        String? bestPath;
+        int bestDensity = 0;
+        int resourceCount = 0;
+
+        for (final resource in drawableSpec.listResources()) {
+          resourceCount++;
+          final value = resource.getValue();
+          if (value is ResFileValue) {
+            final filePath = value.toString();
+
+            // Check if it's a raster image format OR a file without extension (might be an image)
+            if (filePath.toLowerCase().endsWith('.png') ||
+                filePath.toLowerCase().endsWith('.webp') ||
+                filePath.toLowerCase().endsWith('.jpg') ||
+                filePath.toLowerCase().endsWith('.jpeg') ||
+                !filePath.contains('.')) {
+              // Files without extensions might be images
+
+              final config = resource.getConfig();
+              final qualifiers = config.getFlags().getQualifiers();
+
+              int currentDensity = 160; // Default mdpi
+              for (final densityName in densityPriority.keys) {
+                if (qualifiers.contains('-$densityName')) {
+                  currentDensity = densityPriority[densityName]!;
+                  break;
+                }
+              }
+
+              if (qualifiers.isEmpty || qualifiers == '') {
+                currentDensity = densityPriority['']!;
+              }
+
+              if (currentDensity > bestDensity) {
+                bestDensity = currentDensity;
+                bestPath = filePath;
+              }
+            } else {
+              // Skipping non-raster file: $filePath
+            }
+          }
+        }
+
+        return bestPath;
+      } catch (e) {
+        return null;
+      }
     } catch (e) {
       return null;
     }
