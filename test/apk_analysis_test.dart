@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
 import 'package:apktool_dart/src/brut/androlib/apk_decoder.dart';
@@ -375,6 +376,122 @@ void main() {
       );
 
       print('\nManifest decoding: $successCount/${apkFiles.length} successful');
+    });
+
+    test('icon export functionality works correctly', () async {
+      final decoder = ApkDecoder();
+      var iconsExported = 0;
+
+      for (final apkFile in apkFiles) {
+        final apkName = p.basename(apkFile.path);
+
+        try {
+          // Analyze the APK
+          final result = await decoder.analyzeApk(apkFile.path);
+
+          if (result == null) {
+            print(
+              '  ⚠️ Skipping icon export test for $apkName (arch mismatch)',
+            );
+            continue;
+          }
+
+          final iconBase64 = result['iconBase64'] as String?;
+
+          if (iconBase64 != null && iconBase64.isNotEmpty) {
+            // Create a temporary file for the icon
+            final tempDir = Directory.systemTemp.createTempSync('icon_test_');
+            final iconPath = p.join(tempDir.path, '${apkName}_icon.png');
+
+            try {
+              // Test the CLI tool with --export-icon option
+              final cliResult = await Process.run('dart', [
+                'run',
+                'bin/apktool.dart',
+                '--export-icon',
+                iconPath,
+                apkFile.path,
+              ]);
+
+              // Check that the CLI command succeeded
+              expect(
+                cliResult.exitCode,
+                equals(0),
+                reason: 'CLI command should succeed for $apkName',
+              );
+
+              // Check that the icon file was created
+              final iconFile = File(iconPath);
+              expect(
+                await iconFile.exists(),
+                isTrue,
+                reason: 'Icon file should be created for $apkName',
+              );
+
+              // Check that the file is not empty
+              final iconBytes = await iconFile.readAsBytes();
+              expect(
+                iconBytes.length,
+                greaterThan(0),
+                reason: 'Icon file should not be empty for $apkName',
+              );
+
+              // Check that it's a valid PNG (starts with PNG magic bytes)
+              expect(
+                iconBytes.length,
+                greaterThanOrEqualTo(8),
+                reason: 'Icon file should be at least 8 bytes for $apkName',
+              );
+              expect(
+                iconBytes.sublist(0, 8),
+                equals([137, 80, 78, 71, 13, 10, 26, 10]), // PNG magic bytes
+                reason: 'Icon file should be a valid PNG for $apkName',
+              );
+
+              // Verify the base64 content matches the exported file
+              final expectedBytes = base64Decode(iconBase64);
+              expect(
+                iconBytes,
+                equals(expectedBytes),
+                reason:
+                    'Exported icon should match base64 content for $apkName',
+              );
+
+              iconsExported++;
+              print('✅ $apkName: Icon exported and validated successfully');
+
+              // Check that success message was printed
+              expect(
+                cliResult.stdout.toString(),
+                contains('✅ Icon exported to:'),
+                reason: 'CLI should print success message for $apkName',
+              );
+            } finally {
+              // Clean up temporary directory
+              try {
+                await tempDir.delete(recursive: true);
+              } catch (e) {
+                // Ignore cleanup errors
+              }
+            }
+          } else {
+            print('  ⚠️ $apkName: No icon available for export test');
+          }
+        } catch (e) {
+          print('  ❌ $apkName: Icon export test failed: $e');
+        }
+      }
+
+      // Expect at least some APKs to have exportable icons
+      expect(
+        iconsExported,
+        greaterThan(0),
+        reason: 'At least one APK should have an exportable icon',
+      );
+
+      print(
+        '\nIcon export: $iconsExported/${apkFiles.length} APKs with icons exported successfully',
+      );
     });
   });
 }

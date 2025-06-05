@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io' as dart_io;
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart' as xml;
 import 'package:apktool_dart/src/brut/androlib/icon_renderer.dart';
@@ -15,6 +16,7 @@ import 'res/data/res_table.dart';
 import 'res/decoder/axml_resource_parser.dart';
 import 'res/decoder/manifest_xml_serializer.dart';
 import 'res/data/value/res_value.dart';
+import 'package:image/image.dart' as img;
 
 // Placeholder for AndrolibException if not already defined broadly
 // Assuming it's in common or defined as previously.
@@ -389,37 +391,204 @@ class ApkDecoder {
   /// Get the best icon as base64 encoded PNG
   Future<String?> _getIconAsBase64(String apkPath, String iconRef) async {
     try {
-      // Create temporary directory for resource extraction with proper mapping
-      final tempDir = await dart_io.Directory.systemTemp.createTemp(
-        'apk_analysis_',
+      // Try to resolve the icon reference through the resource table
+      final resTable = await _getResTable(apkPath);
+      String? resolvedIconPath = await _resolveIconToFilePath(
+        resTable,
+        iconRef,
       );
 
-      // Use the full decodeResources method which handles resource table mapping
-      // This is essential for obfuscated APKs where files have obfuscated names
-      await decodeResources(apkPath, tempDir.path);
+      if (resolvedIconPath != null) {
+        // Extract the specific icon file from APK
+        final iconBytes = await _extractFileFromApk(apkPath, resolvedIconPath);
+        if (iconBytes != null) {
+          // Process the icon (resize, convert to PNG)
+          final processedIcon = await _processIconBytes(
+            iconBytes,
+            resolvedIconPath,
+          );
+          if (processedIcon != null) {
+            final base64Icon = base64Encode(processedIcon);
+            return base64Icon;
+          }
+        }
+      }
 
-      final resourceDir = dart_io.Directory(p.join(tempDir.path, 'res'));
+      // Fallback: Try to find any suitable icon file directly in APK
+      return await _tryDirectIconExtraction(apkPath, iconRef);
+    } catch (e, stackTrace) {
+      print('⚠️  Icon processing failed: $e');
+      return null;
+    }
+  }
 
-      // Use IconRenderer to get the best icon
-      final iconRenderer = IconRenderer(resourceDir.path, verbose: false);
-
-      final renderedIconPath = await iconRenderer.renderIcon(iconRef);
-
-      if (renderedIconPath == null) {
-        await tempDir.delete(recursive: true);
+  /// Resolve icon reference to actual file path using resource table
+  Future<String?> _resolveIconToFilePath(
+    ResTable resTable,
+    String iconRef,
+  ) async {
+    try {
+      if (!iconRef.startsWith('@mipmap/') &&
+          !iconRef.startsWith('@drawable/')) {
         return null;
       }
 
-      // Read icon file and convert to base64
-      final iconBytes = await dart_io.File(renderedIconPath).readAsBytes();
-      final base64Icon = base64Encode(iconBytes);
+      final resourceName = iconRef.startsWith('@mipmap/')
+          ? iconRef.substring('@mipmap/'.length)
+          : iconRef.substring('@drawable/'.length);
+      final resourceType = iconRef.startsWith('@mipmap/')
+          ? 'mipmap'
+          : 'drawable';
 
-      // Clean up temporary files
-      await tempDir.delete(recursive: true);
+      final mainPackage = resTable.getMainPackage();
 
-      return base64Icon;
+      try {
+        final iconType = mainPackage.getType(resourceType);
+        final iconSpec = iconType.getResSpec(resourceName);
+
+        // Collect all raster image resources and their densities
+        final Map<String, int> densityPriority = {
+          'xxxhdpi': 640, // 4x
+          'xxhdpi': 480, // 3x
+          'xhdpi': 320, // 2x
+          'hdpi': 240, // 1.5x
+          'mdpi': 160, // 1x (baseline)
+          'ldpi': 120, // 0.75x
+          '': 160, // Default density if no qualifier
+        };
+
+        String? bestIconPath;
+        int bestDensity = 0;
+
+        // Look through all resources in this spec to find the highest density raster image
+        for (final resource in iconSpec.listResources()) {
+          final value = resource.getValue();
+          if (value is ResFileValue) {
+            final filePath = value.toString();
+
+            // Check if it's a raster image format
+            if (filePath.toLowerCase().endsWith('.png') ||
+                filePath.toLowerCase().endsWith('.webp') ||
+                filePath.toLowerCase().endsWith('.jpg') ||
+                filePath.toLowerCase().endsWith('.jpeg')) {
+              // Extract density from the resource configuration
+              final config = resource.getConfig();
+              final qualifiers = config.getFlags().getQualifiers();
+
+              // Parse density qualifier (e.g., "-xxxhdpi", "-xxhdpi", etc.)
+              int currentDensity = 160; // Default mdpi
+              for (final densityName in densityPriority.keys) {
+                if (qualifiers.contains('-$densityName')) {
+                  currentDensity = densityPriority[densityName]!;
+                  break;
+                }
+              }
+
+              // If no density qualifier found, it might be the default
+              if (qualifiers.isEmpty || qualifiers == '') {
+                currentDensity = densityPriority['']!;
+              }
+
+              // Select the highest density version
+              if (currentDensity > bestDensity) {
+                bestDensity = currentDensity;
+                bestIconPath = filePath;
+              }
+            }
+          }
+        }
+
+        if (bestIconPath != null) {
+          return bestIconPath;
+        }
+      } catch (e) {
+        // Resource not found, continue
+      }
+
+      return null;
     } catch (e) {
-      print('⚠️  Icon processing failed: $e');
+      return null;
+    }
+  }
+
+  /// Extract a specific file from the APK
+  Future<Uint8List?> _extractFileFromApk(
+    String apkPath,
+    String filePath,
+  ) async {
+    final apkFile = ExtFile(apkPath);
+    Directory? apkDirectory;
+
+    try {
+      apkDirectory = await apkFile.getDirectory();
+
+      // Check if the file exists in the APK
+      final files = await apkDirectory.getFiles(recursive: true);
+      if (!files.contains(filePath)) {
+        return null;
+      }
+
+      // Extract the file
+      final fileStream = await apkDirectory.getFileInput(filePath);
+      final fileBytes = <int>[];
+
+      await for (final chunk in fileStream.asStream()) {
+        fileBytes.addAll(chunk);
+      }
+      await fileStream.close();
+
+      return Uint8List.fromList(fileBytes);
+    } catch (e) {
+      return null;
+    } finally {
+      await apkDirectory?.close();
+      await apkFile.close();
+    }
+  }
+
+  /// Process raw icon bytes - convert formats and resize as needed
+  Future<Uint8List?> _processIconBytes(
+    Uint8List iconBytes,
+    String fileName,
+  ) async {
+    try {
+      // Try to decode the image
+      final img.Image? image;
+      final extension = p.extension(fileName).toLowerCase();
+
+      switch (extension) {
+        case '.png':
+          image = img.decodePng(iconBytes);
+          break;
+        case '.webp':
+          image = img.decodeWebP(iconBytes);
+          break;
+        case '.jpg':
+        case '.jpeg':
+          image = img.decodeJpg(iconBytes);
+          break;
+        default:
+          image = img.decodeImage(iconBytes);
+      }
+
+      if (image == null) {
+        return null;
+      }
+
+      // Resize to standard icon size (192x192)
+      const targetSize = 192;
+      final resizedImage = img.copyResize(
+        image,
+        width: targetSize,
+        height: targetSize,
+        interpolation: img.Interpolation.cubic,
+      );
+
+      // Always output as PNG for consistency
+      final pngBytes = img.encodePng(resizedImage);
+
+      return Uint8List.fromList(pngBytes);
+    } catch (e) {
       return null;
     }
   }
@@ -492,5 +661,98 @@ class ApkDecoder {
 
     // Unknown reference type or resolution failed
     return null;
+  }
+
+  /// Try to extract icon directly from APK by looking for common icon files
+  Future<String?> _tryDirectIconExtraction(
+    String apkPath,
+    String iconRef,
+  ) async {
+    try {
+      final apkFile = ExtFile(apkPath);
+      Directory? apkDirectory;
+
+      try {
+        apkDirectory = await apkFile.getDirectory();
+        final files = await apkDirectory.getFiles(recursive: true);
+
+        // Look for potential icon files
+        final iconCandidates = <String>[];
+        for (final fileName in files) {
+          // Look for common icon patterns
+          if (fileName.contains('ic_launcher') ||
+              fileName.contains('icon') ||
+              fileName.endsWith('.png') ||
+              fileName.endsWith('.webp') ||
+              fileName.endsWith('.jpg') ||
+              fileName.endsWith('.jpeg')) {
+            iconCandidates.add(fileName);
+          }
+        }
+
+        // Try to find the best icon candidate
+        String? bestIcon;
+
+        // Priority 1: Files with ic_launcher in the name
+        for (final candidate in iconCandidates) {
+          if (candidate.contains('ic_launcher') &&
+              (candidate.endsWith('.png') || candidate.endsWith('.webp'))) {
+            bestIcon = candidate;
+            break;
+          }
+        }
+
+        // Priority 2: Any PNG/WebP with icon in the name
+        if (bestIcon == null) {
+          for (final candidate in iconCandidates) {
+            if (candidate.contains('icon') &&
+                (candidate.endsWith('.png') || candidate.endsWith('.webp'))) {
+              bestIcon = candidate;
+              break;
+            }
+          }
+        }
+
+        // Priority 3: Any PNG/WebP file
+        if (bestIcon == null) {
+          for (final candidate in iconCandidates) {
+            if (candidate.endsWith('.png') || candidate.endsWith('.webp')) {
+              bestIcon = candidate;
+              break;
+            }
+          }
+        }
+
+        if (bestIcon != null) {
+          // Extract the icon file
+          final iconStream = await apkDirectory.getFileInput(bestIcon);
+          final iconBytes = <int>[];
+
+          await for (final chunk in iconStream.asStream()) {
+            iconBytes.addAll(chunk);
+          }
+          await iconStream.close();
+
+          if (iconBytes.isNotEmpty) {
+            // Convert to PNG if needed and resize
+            final processedIcon = await _processIconBytes(
+              Uint8List.fromList(iconBytes),
+              bestIcon,
+            );
+            if (processedIcon != null) {
+              final base64Icon = base64Encode(processedIcon);
+              return base64Icon;
+            }
+          }
+        }
+      } finally {
+        await apkDirectory?.close();
+        await apkFile.close();
+      }
+
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 }
