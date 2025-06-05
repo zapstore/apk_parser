@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart' as xml;
 import 'package:apktool_dart/src/brut/androlib/icon_renderer.dart';
+import '../util/signature_parser.dart';
 
 import '../directory/directory.dart';
 import '../directory/ext_file.dart';
@@ -315,7 +316,16 @@ class ApkDecoder {
         iconBase64 = await _getIconAsBase64(apkPath, iconRef);
       }
 
-      // 5. Build result JSON
+      // 5. Get certificate hashes
+      Set<String> certificateHashes = {};
+      try {
+        certificateHashes = await getSignatureHashes(apkPath);
+      } catch (e) {
+        print('⚠️  Could not extract certificate hashes: $e');
+        // Continue without certificate hashes
+      }
+
+      // 6. Build result JSON
       final result = {
         'package': packageId,
         'appName': appName,
@@ -325,6 +335,7 @@ class ApkDecoder {
         'targetSdkVersion': targetSdkVersion,
         'permissions': permissions,
         'iconBase64': iconBase64,
+        'certificateHashes': certificateHashes.toList(),
       };
 
       return result;
