@@ -316,27 +316,9 @@ class ApkDecoder {
           }
         }
 
-        // Now handle the resolved reference
+        // Recursively resolve string references
         if (resolvedRef != null) {
-          if (resolvedRef.startsWith('@string/')) {
-            final stringName = resolvedRef.substring('@string/'.length);
-            try {
-              // Look up string resource in the main package
-              final mainPackage = resTable.getMainPackage();
-              final stringType = mainPackage.getType('string');
-              final stringSpec = stringType.getResSpec(stringName);
-              final resource = stringSpec.getDefaultResource();
-              final value = resource.getValue();
-              if (value is ResStringValue) {
-                appName = value.value;
-              }
-            } catch (e) {
-              // Could not resolve string resource, keep fallback
-            }
-          } else if (!resolvedRef.startsWith('@')) {
-            // Direct string value
-            appName = resolvedRef;
-          }
+          appName = _resolveStringResource(resTable, resolvedRef) ?? packageId;
         }
       }
 
@@ -440,5 +422,75 @@ class ApkDecoder {
       print('⚠️  Icon processing failed: $e');
       return null;
     }
+  }
+
+  String? _resolveStringResource(ResTable resTable, String ref) {
+    // Maximum recursion depth to prevent infinite loops
+    const maxDepth = 10;
+    return _resolveStringResourceRecursive(resTable, ref, 0, maxDepth);
+  }
+
+  String? _resolveStringResourceRecursive(
+    ResTable resTable,
+    String ref,
+    int depth,
+    int maxDepth,
+  ) {
+    // Prevent infinite recursion
+    if (depth >= maxDepth) {
+      return null;
+    }
+
+    if (ref.startsWith('@string/')) {
+      final stringName = ref.substring('@string/'.length);
+      try {
+        // Look up string resource in the main package
+        final mainPackage = resTable.getMainPackage();
+        final stringType = mainPackage.getType('string');
+        final stringSpec = stringType.getResSpec(stringName);
+        final resource = stringSpec.getDefaultResource();
+        final value = resource.getValue();
+
+        if (value is ResStringValue) {
+          final resolvedValue = value.value;
+          // If the resolved value is another string reference, resolve it recursively
+          if (resolvedValue.startsWith('@string/')) {
+            return _resolveStringResourceRecursive(
+              resTable,
+              resolvedValue,
+              depth + 1,
+              maxDepth,
+            );
+          } else {
+            // Final string value, return it
+            return resolvedValue;
+          }
+        } else if (value is ResReferenceValue) {
+          // Handle reference values by resolving the reference ID
+          final refId = value.referenceId;
+
+          // Resolve the reference to get the target resource reference string
+          final resolvedRef = resTable.resolveReference(refId);
+          if (resolvedRef != null) {
+            // Recursively resolve the referenced resource
+            return _resolveStringResourceRecursive(
+              resTable,
+              resolvedRef,
+              depth + 1,
+              maxDepth,
+            );
+          }
+        }
+      } catch (e) {
+        // Could not resolve string resource, return null
+        return null;
+      }
+    } else if (!ref.startsWith('@')) {
+      // Direct string value (not a reference)
+      return ref;
+    }
+
+    // Unknown reference type or resolution failed
+    return null;
   }
 }
