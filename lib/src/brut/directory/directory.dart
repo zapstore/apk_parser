@@ -8,11 +8,11 @@ import 'apktool_io_exception.dart';
 abstract class Directory {
   static const String separator = '/';
 
-  Set<String> getFiles({bool recursive = false});
-  Map<String, Directory> getDirs({bool recursive = false});
+  Future<Set<String>> getFiles({bool recursive = false});
+  Future<Map<String, Directory>> getDirs({bool recursive = false});
 
-  bool containsFile(String path);
-  bool containsDir(String path);
+  Future<bool> containsFile(String path);
+  Future<bool> containsDir(String path);
 
   Future<AbstractInputStream> getFileInput(String path);
   Future<AbstractOutputStream> getFileOutput(String path);

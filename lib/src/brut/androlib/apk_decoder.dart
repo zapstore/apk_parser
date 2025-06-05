@@ -104,7 +104,7 @@ class ApkDecoder {
       }
 
       // Process all files in APK (not just mapped ones)
-      final files = apkDirectory.getFiles();
+      final files = await apkDirectory.getFiles();
 
       for (final fileName in files) {
         // Only process files in res/ directory
@@ -218,14 +218,26 @@ class ApkDecoder {
 
   /// Fast APK analysis that returns essential information as JSON
   /// without writing files to disk (except temporary icon processing)
-  Future<Map<String, dynamic>> analyzeApk(String apkPath) async {
+  Future<Map<String, dynamic>?> analyzeApk(
+    String apkPath, {
+    String? requiredArchitecture,
+  }) async {
     final apkFile = dart_io.File(apkPath);
     if (!await apkFile.exists()) {
       throw FileSystemException('APK file not found', apkPath);
     }
 
+    // Isolate architecture check to its own ExtFile instance to avoid state issues.
+    final architectures = await _getArchitectures(apkPath);
+
+    // If a required architecture is specified, check if it's present
+    if (requiredArchitecture != null &&
+        !architectures.contains(requiredArchitecture)) {
+      return null; // Mismatch, so return null as requested
+    }
+
     try {
-      // 1. Decode manifest using existing method
+      // 2. Decode manifest using existing method
       final manifestXml = await decodeManifestToXmlText(apkPath);
       final manifestDoc = xml.XmlDocument.parse(manifestXml);
       final manifestElement = manifestDoc.rootElement;
@@ -281,10 +293,10 @@ class ApkDecoder {
           applicationElement?.getAttribute('android:icon') ??
           applicationElement?.getAttribute('icon');
 
-      // 2. Load resource table for app name resolution
+      // 3. Load resource table for app name resolution
       final resTable = await _getResTable(apkPath);
 
-      // 3. Get app name from string resources
+      // 4. Get app name from string resources
       String? appName = packageId; // Fallback to package ID
       final appLabelRef =
           applicationElement?.getAttribute('android:label') ??
@@ -328,13 +340,13 @@ class ApkDecoder {
         }
       }
 
-      // 4. Get best icon as base64
+      // 5. Get best icon as base64
       String? iconBase64;
       if (iconRef != null) {
         iconBase64 = await _getIconAsBase64(apkPath, iconRef);
       }
 
-      // 5. Get certificate hashes
+      // 6. Get certificate hashes
       Set<String> certificateHashes = {};
       try {
         certificateHashes = await getSignatureHashes(apkPath);
@@ -343,7 +355,7 @@ class ApkDecoder {
         // Continue without certificate hashes
       }
 
-      // 6. Build result JSON
+      // 7. Build result JSON
       final result = {
         'package': packageId,
         'appName': appName,
@@ -352,6 +364,7 @@ class ApkDecoder {
         'minSdkVersion': minSdkVersion,
         'targetSdkVersion': targetSdkVersion,
         'permissions': permissions,
+        'architectures': architectures.toList(),
         'iconBase64': iconBase64,
         'certificateHashes': certificateHashes.toList(),
       };
@@ -360,6 +373,34 @@ class ApkDecoder {
     } catch (e) {
       // print('❌ Analysis failed: $e');
       rethrow;
+    }
+  }
+
+  Future<Set<String>> _getArchitectures(String apkPath) async {
+    ExtFile? extFile;
+    Directory? apkDirectory;
+    try {
+      extFile = ExtFile(apkPath);
+      apkDirectory = await extFile.getDirectory();
+      final files = await apkDirectory.getFiles(recursive: true);
+      final architectures = <String>{};
+
+      for (final file in files) {
+        if (file.startsWith('lib/')) {
+          final parts = file.split('/');
+          if (parts.length > 1 && parts[1].isNotEmpty) {
+            architectures.add(parts[1]);
+          }
+        }
+      }
+
+      if (architectures.isEmpty) {
+        architectures.add('arm64-v8a');
+      }
+      return architectures;
+    } finally {
+      await apkDirectory?.close();
+      await extFile?.close();
     }
   }
 

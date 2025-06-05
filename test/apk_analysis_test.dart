@@ -56,6 +56,14 @@ void main() {
           // 1. Get analyzeApk output
           final analysisResult = await decoder.analyzeApk(apkFile.path);
 
+          // This test is not valid if architecture check fails
+          if (analysisResult == null) {
+            print(
+              '  ⚠️ Skipping aapt2 comparison for $apkName (arch mismatch)',
+            );
+            continue;
+          }
+
           // 2. Get aapt2 dump badging output
           final aapt2Result = await Process.run(aapt2Path, [
             'dump',
@@ -212,6 +220,7 @@ void main() {
         'minSdkVersion',
         'targetSdkVersion',
         'permissions',
+        'architectures',
       ];
 
       for (final apkFile in apkFiles) {
@@ -219,6 +228,14 @@ void main() {
 
         try {
           final result = await decoder.analyzeApk(apkFile.path);
+
+          // In some test cases, we might get null due to architecture mismatch
+          if (result == null) {
+            print(
+              '  ⚠️ Skipping JSON structure test for $apkName (arch mismatch)',
+            );
+            continue;
+          }
 
           // Verify all required fields are present
           for (final field in requiredFields) {
@@ -241,6 +258,11 @@ void main() {
             reason: 'permissions should be a list for $apkName',
           );
           expect(
+            result['architectures'],
+            isA<List>(),
+            reason: 'architectures should be a list for $apkName',
+          );
+          expect(
             result['package'],
             isA<String>(),
             reason: 'package should be a string for $apkName',
@@ -256,6 +278,62 @@ void main() {
           fail('Failed to analyze $apkName: $e');
         }
       }
+    });
+
+    test('analyzeApk handles architecture filtering correctly', () async {
+      final decoder = ApkDecoder();
+      File? multiArchApk;
+      List<dynamic>? supportedArches;
+
+      // Find the first APK that has at least one architecture, without relying on filename
+      for (final apkFile in apkFiles) {
+        final result = await decoder.analyzeApk(apkFile.path);
+        if (result != null &&
+            result.containsKey('architectures') &&
+            (result['architectures'] as List).isNotEmpty) {
+          // Found an APK with architectures, but we need to check it's not the default
+          final arches = result['architectures'] as List;
+          if (arches.length > 1 || arches.first != 'arm64-v8a') {
+            multiArchApk = apkFile;
+            supportedArches = result['architectures'] as List;
+            break;
+          }
+        }
+      }
+
+      if (multiArchApk == null) {
+        print(
+          '\n⚠️ Skipping architecture filtering test: No APK with non-default native architectures found.',
+        );
+        return;
+      }
+
+      final apkName = p.basename(multiArchApk.path);
+      print('\n🔬 Testing architecture filtering on: $apkName');
+      print('  Supported architectures: $supportedArches');
+
+      // We already know from the loop that supportedArches is not null or empty.
+      final firstArch = supportedArches!.first as String;
+
+      // 2. Analyze with a matching architecture
+      final result2 = await decoder.analyzeApk(
+        multiArchApk.path,
+        requiredArchitecture: firstArch,
+      );
+      expect(result2, isNotNull);
+      expect(result2?['package'], isNotNull);
+      print('  ✅ Correctly returned data for matching arch: $firstArch');
+
+      // 3. Analyze with a non-matching architecture
+      const nonExistentArch = 'riscv64';
+      final result3 = await decoder.analyzeApk(
+        multiArchApk.path,
+        requiredArchitecture: nonExistentArch,
+      );
+      expect(result3, isNull);
+      print(
+        '  ✅ Correctly returned null for non-matching arch: $nonExistentArch',
+      );
     });
 
     test('manifest decoding works for all APKs', () async {

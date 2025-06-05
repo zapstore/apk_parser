@@ -1,14 +1,26 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:apktool_dart/src/brut/androlib/apk_decoder.dart';
+import 'package:args/args.dart';
 
 void main(List<String> args) async {
-  if (args.isEmpty) {
-    printUsage();
+  final parser = ArgParser()
+    ..addOption(
+      'arch',
+      abbr: 'a',
+      help: 'Specify a required architecture (e.g., arm64-v8a)',
+    );
+
+  final argResults = parser.parse(args);
+  final rest = argResults.rest;
+
+  if (rest.isEmpty) {
+    printUsage(parser);
     exit(1);
   }
 
-  final apkPath = args[0];
+  final apkPath = rest.first;
+  final requiredArch = argResults['arch'] as String?;
 
   // Check if APK exists
   final apkFile = File(apkPath);
@@ -21,7 +33,15 @@ void main(List<String> args) async {
     final decoder = ApkDecoder();
 
     // Fast analysis - returns all essential info as JSON
-    final result = await decoder.analyzeApk(apkPath);
+    final result = await decoder.analyzeApk(
+      apkPath,
+      requiredArchitecture: requiredArch,
+    );
+
+    if (result == null) {
+      print('APK does not contain the required architecture: $requiredArch');
+      exit(1);
+    }
 
     // Output JSON result
     final jsonOutput = JsonEncoder.withIndent('  ').convert(result);
@@ -32,14 +52,16 @@ void main(List<String> args) async {
   }
 }
 
-void printUsage() {
+void printUsage(ArgParser parser) {
   print('Apktool Dart - Fast APK Analyzer');
   print('');
-  print('Usage:');
-  print('  dart run apktool.dart <apk_file>');
+  print('Usage: dart run apktool.dart [options] <apk_file>');
   print('');
   print('Arguments:');
-  print('  apk_file      Path to the APK file to analyze');
+  print('  <apk_file>      Path to the APK file to analyze');
+  print('');
+  print('Options:');
+  print(parser.usage);
   print('');
   print('Output:');
   print('  JSON containing:');
@@ -50,8 +72,9 @@ void printUsage() {
   print('  • minSdkVersion    - Minimum Android API level');
   print('  • targetSdkVersion - Target Android API level');
   print('  • permissions      - Array of requested permissions');
+  print('  • architectures    - Array of supported CPU architectures');
   print('  • iconBase64       - App icon as base64-encoded PNG (192x192px)');
-  print('  • analysisTimestamp- When the analysis was performed');
+  print('  • certificateHashes- Array of certificate hashes (SHA-256)');
   print('');
   print('Features:');
   print('  • Fast analysis without writing files to disk');
@@ -60,6 +83,4 @@ void printUsage() {
   print('  • Fallback mechanism for problematic APKs');
   print('  • All essential info in single JSON output');
   print('');
-  print('Example:');
-  print('  dart run apktool.dart app.apk > app_info.json');
 }

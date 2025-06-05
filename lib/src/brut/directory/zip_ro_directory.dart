@@ -1,6 +1,7 @@
 library;
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert'; // For utf8 decoding
 import 'dart:io';
 import 'dart:typed_data';
@@ -136,7 +137,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
   List<_ZipEntry>? _allEntries;
 
   // Instance members for ZipRODirectory to store its own files and directories
-  // These will be returned by the overridden loadInitialFiles and loadInitialDirs
+  // These will be returned by the overridden loadInitialContent method
   final Set<String> _files = {}; // Initialize to empty
   final Map<String, AbstractDirectoryBase> _dirs = {}; // Initialize to empty
 
@@ -206,7 +207,6 @@ class ZipRODirectory extends AbstractDirectoryBase {
 
   void _populateFilesAndDirs() {
     if (_allEntries == null || _zipData == null) return;
-    // Clear ZipRODirectory's own collections
     _files.clear();
     _dirs.clear();
 
@@ -216,42 +216,62 @@ class ZipRODirectory extends AbstractDirectoryBase {
       if (!entry.name.startsWith(_pathInZip)) {
         continue;
       }
-      if (entry.name == _pathInZip) {
-        // Skip self-listing (e.g. if _pathInZip is "assets/")
+
+      final relativeName = entry.name.substring(_pathInZip.length);
+      if (relativeName.isEmpty || relativeName.contains('../')) {
         continue;
       }
 
-      String relativeName = entry.name.substring(_pathInZip.length);
-
-      if (relativeName.isEmpty) continue;
-      if (relativeName.contains('../')) {
-        // Simple path traversal prevention
-        // Log.w("Skipping potentially malicious path: ${entry.name}");
-        continue;
-      }
-
-      int separatorIndex = relativeName.indexOf('/');
-
+      final separatorIndex = relativeName.indexOf('/');
       if (separatorIndex == -1) {
-        // Potential file in the current directory
-        if (!entry.isDirectory && relativeName.isNotEmpty) {
+        // A file in the current directory level.
+        if (!entry.isDirectory) {
           _files.add(relativeName);
         }
       } else {
-        // Item in a subdirectory or a subdirectory itself
-        String dirName = relativeName.substring(0, separatorIndex);
+        // An entry in a subdirectory.
+        final dirName = relativeName.substring(0, separatorIndex);
         if (dirName.isNotEmpty && !addedSubDirNames.contains(dirName)) {
-          _dirs[dirName] =
-              ZipRODirectory._fromSharedData(
-                    _zipData!,
-                    _allEntries!,
-                    '$_pathInZip$dirName/',
-                  )
-                  as AbstractDirectoryBase;
+          final subDir = ZipRODirectory._fromSharedData(
+            _zipData!,
+            _allEntries!,
+            '$_pathInZip$dirName/',
+          );
+          // This sub-directory will recursively populate its own files/dirs upon access.
+          _dirs[dirName] = subDir as AbstractDirectoryBase;
           addedSubDirNames.add(dirName);
         }
       }
     }
+  }
+
+  // Override the loadInitialContent method required by AbstractDirectoryBase
+  @override
+  Future<DirectoryContent> loadInitialContent() async {
+    if (!_isInitialized) await initialize();
+    return DirectoryContent(Set.from(_files), Map.from(_dirs));
+  }
+
+  // Override getFiles to provide proper recursive functionality
+  @override
+  Future<Set<String>> getFiles({bool recursive = false}) async {
+    if (!_isInitialized) await initialize();
+
+    if (!recursive) {
+      return UnmodifiableSetView(_files);
+    }
+
+    // For recursive, build the full list from the master _allEntries list
+    final files = <String>{};
+    for (final entry in _allEntries!) {
+      if (entry.name.startsWith(_pathInZip) && !entry.isDirectory) {
+        final relativePath = entry.name.substring(_pathInZip.length);
+        if (relativePath.isNotEmpty) {
+          files.add(relativePath);
+        }
+      }
+    }
+    return UnmodifiableSetView(files);
   }
 
   static Future<List<_ZipEntry>> _parseCentralDirectory(
@@ -479,25 +499,14 @@ class ZipRODirectory extends AbstractDirectoryBase {
     throw UnsupportedError("ZipRODirectory is read-only.");
   }
 
-  @override
+  // These methods are no longer needed since AbstractDirectoryBase handles initialization
   Set<String> loadInitialFiles() {
-    if (!_isInitialized) {
-      print(
-        "Warning: ZipRODirectory.loadInitialFiles() called before async initialization completed. File list might be empty or incomplete.",
-      );
-      if (_allEntries != null && _zipData != null) _populateFilesAndDirs();
-    }
+    // This method is obsolete - AbstractDirectoryBase uses loadInitialContent instead
     return Set.unmodifiable(_files);
   }
 
-  @override
   Map<String, AbstractDirectoryBase> loadInitialDirs() {
-    if (!_isInitialized) {
-      print(
-        "Warning: ZipRODirectory.loadInitialDirs() called before async initialization completed. Directory list might be empty or incomplete.",
-      );
-      if (_allEntries != null && _zipData != null) _populateFilesAndDirs();
-    }
+    // This method is obsolete - AbstractDirectoryBase uses loadInitialContent instead
     return Map.unmodifiable(_dirs);
   }
 
@@ -506,23 +515,16 @@ class ZipRODirectory extends AbstractDirectoryBase {
     throw UnsupportedError("ZipRODirectory is read-only.");
   }
 
+  // These methods now properly match the AbstractDirectoryBase signatures
   @override
-  bool containsFile(String path) {
-    if (!_isInitialized) {
-      throw StateError(
-        "ZipRODirectory not initialized. Call initialize() and await its completion first.",
-      );
-    }
+  Future<bool> containsFile(String path) async {
+    if (!_isInitialized) await initialize();
     return _files.contains(path);
   }
 
   @override
-  bool containsDir(String path) {
-    if (!_isInitialized) {
-      throw StateError(
-        "ZipRODirectory not initialized. Call initialize() and await its completion first.",
-      );
-    }
+  Future<bool> containsDir(String path) async {
+    if (!_isInitialized) await initialize();
     return _dirs.containsKey(path);
   }
 

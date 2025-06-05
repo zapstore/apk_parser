@@ -27,34 +27,29 @@ class FileDirectory extends AbstractDirectoryBase {
   String get path => _dir.path;
 
   @override
-  Set<String> loadInitialFiles() {
+  Future<DirectoryContent> loadInitialContent() async {
     final filesSet = <String>{};
-    if (!_dir.existsSync()) return filesSet; // Or throw?
-    final entities = _dir.listSync(followLinks: false);
+    final dirsMap = <String, AbstractDirectoryBase>{};
+
+    if (!await _dir.exists()) {
+      return DirectoryContent(filesSet, dirsMap);
+    }
+
+    final entities = await _dir.list(followLinks: false).toList();
     // Sort to match Java AbstractDirectory behavior (though not strictly required by interface)
     entities.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
+
     for (final entity in entities) {
       if (entity is dart_io.File) {
         filesSet.add(p.basename(entity.path));
-      }
-    }
-    return filesSet;
-  }
-
-  @override
-  Map<String, AbstractDirectoryBase> loadInitialDirs() {
-    final dirsMap = <String, AbstractDirectoryBase>{};
-    if (!_dir.existsSync()) return dirsMap;
-    final entities = _dir.listSync(followLinks: false);
-    entities.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
-    for (final entity in entities) {
-      if (entity is dart_io.Directory) {
+      } else if (entity is dart_io.Directory) {
         final dirName = p.basename(entity.path);
         // Use ExtFile to potentially handle nested zip/apks if FileDirectory was pointed at one (though unlikely for FileDirectory)
         dirsMap[dirName] = FileDirectory(ExtFile(entity.path));
       }
     }
-    return dirsMap;
+
+    return DirectoryContent(filesSet, dirsMap);
   }
 
   @override
