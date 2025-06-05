@@ -192,7 +192,9 @@ class ApkDecoder {
       ); // AXML encoding is handled internally
 
       final serializer = ManifestXmlSerializer(parser);
-      return await serializer.buildXmlDocumentToString();
+      final xmlText = await serializer.buildXmlDocumentToString();
+
+      return xmlText;
     } catch (e, s) {
       print("Error decoding manifest: $e");
       print("Stack trace: $s");
@@ -230,19 +232,35 @@ class ApkDecoder {
 
       // Extract basic app info
       final packageId = manifestElement.getAttribute('package');
-      final versionName = manifestElement.getAttribute('android:versionName');
-      final versionCode = manifestElement.getAttribute('android:versionCode');
+
+      String? versionName = manifestElement.getAttribute('versionName');
+      if (versionName == null || versionName.isEmpty) {
+        versionName = manifestElement.getAttribute('android:versionName');
+      }
+
+      String? versionCode = manifestElement.getAttribute('versionCode');
+      if (versionCode == null || versionCode.isEmpty) {
+        versionCode = manifestElement.getAttribute('android:versionCode');
+      }
 
       // Extract SDK versions
       final usesSdkElement = manifestDoc
           .findAllElements('uses-sdk')
           .firstOrNull;
-      final minSdkVersion = usesSdkElement?.getAttribute(
-        'android:minSdkVersion',
+
+      String? minSdkVersion = usesSdkElement?.getAttribute('minSdkVersion');
+      if (minSdkVersion == null || minSdkVersion.isEmpty) {
+        minSdkVersion = usesSdkElement?.getAttribute('android:minSdkVersion');
+      }
+
+      String? targetSdkVersion = usesSdkElement?.getAttribute(
+        'targetSdkVersion',
       );
-      final targetSdkVersion = usesSdkElement?.getAttribute(
-        'android:targetSdkVersion',
-      );
+      if (targetSdkVersion == null || targetSdkVersion.isEmpty) {
+        targetSdkVersion = usesSdkElement?.getAttribute(
+          'android:targetSdkVersion',
+        );
+      }
 
       // Extract permissions
       final permissions = <String>[];
