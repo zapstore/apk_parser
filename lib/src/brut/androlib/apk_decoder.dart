@@ -229,20 +229,20 @@ class ApkDecoder {
       final manifestElement = manifestDoc.rootElement;
 
       // Extract basic app info
-      final packageId = manifestElement.getAttribute('package') ?? 'unknown';
-      final versionName =
-          manifestElement.getAttribute('android:versionName') ?? 'unknown';
-      final versionCode =
-          manifestElement.getAttribute('android:versionCode') ?? 'unknown';
+      final packageId = manifestElement.getAttribute('package');
+      final versionName = manifestElement.getAttribute('android:versionName');
+      final versionCode = manifestElement.getAttribute('android:versionCode');
 
       // Extract SDK versions
       final usesSdkElement = manifestDoc
           .findAllElements('uses-sdk')
           .firstOrNull;
-      final minSdkVersion =
-          usesSdkElement?.getAttribute('android:minSdkVersion') ?? 'unknown';
-      final targetSdkVersion =
-          usesSdkElement?.getAttribute('android:targetSdkVersion') ?? 'unknown';
+      final minSdkVersion = usesSdkElement?.getAttribute(
+        'android:minSdkVersion',
+      );
+      final targetSdkVersion = usesSdkElement?.getAttribute(
+        'android:targetSdkVersion',
+      );
 
       // Extract permissions
       final permissions = <String>[];
@@ -267,7 +267,7 @@ class ApkDecoder {
       final resTable = await _getResTable(apkPath);
 
       // 3. Get app name from string resources
-      String appName = packageId; // Fallback to package ID
+      String? appName = packageId; // Fallback to package ID
       final appLabelRef =
           applicationElement?.getAttribute('android:label') ??
           applicationElement?.getAttribute('label');

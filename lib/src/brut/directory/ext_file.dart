@@ -63,7 +63,9 @@ class ExtFile {
       // Basic check, could be improved (e.g. by magic bytes for zip)
       if (path.toLowerCase().endsWith('.zip') ||
           path.toLowerCase().endsWith('.apk')) {
-        _directory = ZipRODirectory(this);
+        final zipDir = ZipRODirectory(path);
+        await zipDir.initialize();
+        _directory = zipDir;
       } else {
         throw DirectoryException(
           'File is not a directory and not a recognized archive (zip/apk): $path',
