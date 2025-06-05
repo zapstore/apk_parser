@@ -12,6 +12,10 @@ import 'package:apktool_dart/src/brut/util/ext_data_input.dart';
 // public static final int RES_STRING_POOL_TYPE = 0x0001;
 const int _resStringPoolType = 0x0001;
 
+// StringBlock.java uses 28 for STRING_BLOCK_HEADER_SIZE
+// This is sizeof(ResChunk_header) which is 8, plus 5 uint32_t fields (20 bytes) = 28.
+const int _kResStringPoolHeaderFixedSize = 28;
+
 // Placeholder for ResXmlEncoders.escapeXmlChars - will be needed for getHTML
 // For now, getString will not escape.
 String _escapeXmlChars(String s) => s; // Basic placeholder
@@ -57,55 +61,93 @@ class StringBlock {
   // Corresponds to static StringBlock readWithoutChunk in Java
   static Future<StringBlock> _read(
     ExtDataInput dei,
-    int startPosition,
-    int headerSize,
-    int chunkSize,
+    int
+    startPosition, // Absolute start of the ResStringPool chunk in the file/buffer
+    int
+    headerSize, // Size of the ResStringPool_header (ResChunk_header part + uint32 fields + padding)
+    // This is ResStringPool_header.header.headerSize
+    int
+    chunkSize, // Total size of the ResStringPool chunk (ResStringPool_header.header.chunkSize)
   ) async {
     final block = StringBlock._();
+
+    // dei is currently positioned at the start of the ResStringPool_header's specific fields
+    // (i.e., after the ResChunk_header type, headerSize, chunkSize for this StringPool chunk).
+    // It's at startPosition + sizeof(ResChunk_header itself, e.g. 8 bytes).
 
     final stringCount = dei.readInt();
     final styleCount = dei.readInt();
     final flags = dei.readInt();
-    final stringsOffset = dei.readInt();
-    final stylesOffset = dei
-        .readInt(); // This is the offset FROM THE START OF THE CHUNK
+    final stringsStart = dei
+        .readInt(); // Offset from start of chunk to string data
+    final stylesStart = dei
+        .readInt(); // Offset from start of chunk to style data
 
-    if (headerSize > _stringBlockHeaderSize) {
-      dei.skipBytes(headerSize - _stringBlockHeaderSize);
+    // The 'headerSize' argument is ResStringPool_header.header.headerSize.
+    // It defines the total size of the ResStringPool_header structure (which includes its own ResChunk_header part).
+    // We've already read 5 ints (20 bytes). The ResChunk_header part is 8 bytes. Total 28.
+    // If headerSize > 28, there's extra data in the header we need to skip.
+    // Current position after reading 5 ints: (startPosition + 8) + 20 = startPosition + 28.
+    // We need to skip up to (startPosition + headerSize).
+    final alreadyReadFromHeaderSpecificFields = 20; // 5 ints
+    final resChunkHeaderSelfSize = 8; // Standard size of ResChunk_header struct
+    final minExpectedHeaderSize =
+        resChunkHeaderSelfSize + alreadyReadFromHeaderSpecificFields;
+
+    if (headerSize > minExpectedHeaderSize) {
+      dei.skipBytes(headerSize - minExpectedHeaderSize);
     }
+    // dei is now at startPosition + headerSize. This is where the string offsets array begins.
 
     block._isUtf8 = (flags & _utf8Flag) != 0;
-    // maxAllowedPosition for offsets should be start of string data
-    block._stringOffsets = dei.readSafeIntArray(
+    block._stringOffsets = dei.readIntArray(
       stringCount,
-      startPosition + stringsOffset,
-    );
+    ); // Reads stringCount * 4 bytes. dei advances.
 
-    if (styleCount != 0) {
-      // This case means stylesOffset is invalid or points before strings, implies no style data despite styleCount > 0
-      // This might happen with obfuscated files. Proceed as if no styles.
+    if (styleCount > 0) {
+      // StringBlock in Java reads mStyleOffsets here. We need to at least skip these bytes
+      // to correctly position for string data if string data comes after style offsets array.
+      // However, string data starts at (startPosition + stringsStart).
+      // The style offsets array would be between string offsets array and string data
+      // IF stringsStart accounts for it. This is typical.
+      dei.skipBytes(
+        styleCount * 4,
+      ); // Skip over the style_offsets_array. dei advances.
     }
 
-    final bool hasStyles = stylesOffset != 0 && styleCount != 0;
-    int sizeOfStringsData = chunkSize - stringsOffset;
+    // Now, position 'dei' to the absolute start of the string data.
+    // stringsStart is an offset from the beginning of the chunk (startPosition).
+    dei.jumpTo(startPosition + stringsStart);
 
-    if (hasStyles) {
-      // If stylesOffset is valid and > stringsOffset, string data ends there
-      if (stylesOffset > stringsOffset) {
-        sizeOfStringsData = stylesOffset - stringsOffset;
-      } else {
-        // This case means stylesOffset is invalid or points before strings, implies no style data despite styleCount > 0
-        // This might happen with obfuscated files. Proceed as if no styles.
-      }
+    int stringDataLength;
+    if (styleCount > 0 && stylesStart > 0) {
+      // If styles are present, string data runs from stringsStart to stylesStart.
+      // Both are absolute offsets from chunk start (startPosition).
+      stringDataLength = stylesStart - stringsStart;
+    } else {
+      // No styles, or stylesStart is 0. String data runs from stringsStart to chunk end.
+      // chunkSize is total size of chunk. stringsStart is offset from chunk start.
+      stringDataLength = chunkSize - stringsStart;
     }
 
-    block._strings = dei.readBytes(sizeOfStringsData);
+    if (stringDataLength < 0) {
+      // This case should ideally not happen if offsets are correct.
+      // print('[StringBlock] Warning: Calculated negative string data length ($stringDataLength). Setting to 0.');
+      stringDataLength = 0;
+    }
 
-    // Ensure we're positioned at the end of the chunk
-    final endPosition = startPosition + chunkSize;
-    final currentPos = dei.position();
-    if (currentPos < endPosition) {
-      dei.jumpTo(endPosition);
+    block._strings = dei.readBytes(stringDataLength);
+
+    // Ensure 'dei' is positioned at the end of the chunk, to be safe for subsequent chunk reads.
+    final expectedEndPosition = startPosition + chunkSize;
+    if (dei.position() < expectedEndPosition) {
+      dei.jumpTo(expectedEndPosition);
+    } else if (dei.position() > expectedEndPosition) {
+      // This might indicate an issue with length calculations or prior reads.
+      // print(
+      //   '[StringBlock] Warning: Stream position (${dei.position()}) is past expected chunk end ($expectedEndPosition). Resetting to chunk end.',
+      // );
+      dei.jumpTo(expectedEndPosition); // Or handle as error
     }
 
     return block;

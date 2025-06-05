@@ -329,24 +329,23 @@ class ARSCDecoder {
     final entryOffsets = <int, int>{};
 
     if (isSparse) {
-      // Sparse entries
+      // Sparse entries: Java Apktool always reads a ushort for the offset value and multiplies by 4.
+      // Match this behavior for fidelity.
       for (int i = 0; i < entryCount; i++) {
         final idx = _in.readUnsignedShort();
-        final rawOffset = isOffset16 ? _in.readUnsignedShort() : _in.readInt();
-        // For 32-bit values, check if it's NO_ENTRY (-1 when read as signed int)
-        final isNoEntry = isOffset16
-            ? (rawOffset == kNoEntryOffset16)
-            : (rawOffset == -1 || rawOffset == kNoEntry);
+        final rawOffsetVal = _in
+            .readUnsignedShort(); // Always read ushort for offset value
 
-        if (!isNoEntry) {
-          entryOffsets[idx] = rawOffset * (isOffset16 ? 4 : 1);
+        // Check for NO_ENTRY based on 16-bit representation
+        if (rawOffsetVal != kNoEntryOffset16) {
+          entryOffsets[idx] =
+              rawOffsetVal * 4; // Always multiply by 4, like Java
         }
       }
     } else {
       // Dense entries
       for (int i = 0; i < entryCount; i++) {
         final rawOffset = isOffset16 ? _in.readUnsignedShort() : _in.readInt();
-        // For 32-bit values, check if it's NO_ENTRY (-1 when read as signed int)
         final isNoEntry = isOffset16
             ? (rawOffset == kNoEntryOffset16)
             : (rawOffset == -1 || rawOffset == kNoEntry);
