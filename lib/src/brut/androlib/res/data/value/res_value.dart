@@ -27,8 +27,7 @@ class ResStringValue extends ResIntBasedValue {
 
 class ResReferenceValue extends ResIntBasedValue {
   final int referenceId;
-  final String? referenceString; // Optional resolved reference
-  // TODO: Add package reference when circular dependencies are resolved
+  final String? referenceString;
 
   ResReferenceValue(this.referenceId, [this.referenceString]);
 

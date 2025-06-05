@@ -6,23 +6,10 @@ import 'dart:typed_data';
 import 'package:apktool_dart/src/brut/common/brut_exception.dart';
 import 'package:apktool_dart/src/brut/util/ext_data_input.dart';
 
-// ARSCHeader constants will be needed
-// import '../data/arsc/arsc_header.dart';
-// For now, define locally or use direct values from ARSCHeader.java search results
-// public static final int RES_STRING_POOL_TYPE = 0x0001;
 const int _resStringPoolType = 0x0001;
-
-// StringBlock.java uses 28 for STRING_BLOCK_HEADER_SIZE
-// This is sizeof(ResChunk_header) which is 8, plus 5 uint32_t fields (20 bytes) = 28.
-const int _kResStringPoolHeaderFixedSize = 28;
-
-// Placeholder for ResXmlEncoders.escapeXmlChars - will be needed for getHTML
-// For now, getString will not escape.
-String _escapeXmlChars(String s) => s; // Basic placeholder
 
 class StringBlock {
   static const int _utf8Flag = 0x00000100;
-  static const int _stringBlockHeaderSize = 28;
 
   late List<int> _stringOffsets;
   late Uint8List _strings;
@@ -250,18 +237,7 @@ class StringBlock {
     }
   }
 
-  // getHTML and find methods are lower priority for initial manifest decoding.
-  // They can be ported later if needed.
-  String? getHtml(int index) {
-    // TODO: Port getHTML if styled text is needed
-    String? rawString = getString(index);
-    if (rawString == null) return null;
-    // Basic escaping for now, real impl needs style processing
-    return _escapeXmlChars(rawString);
-  }
-
   int find(String string) {
-    // TODO: Port find if needed
     return -1;
   }
 }

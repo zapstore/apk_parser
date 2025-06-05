@@ -79,6 +79,4 @@ class ResPackage {
   void addSynthesizedRes(ResID resId) {
     _synthesizedRes.add(resId);
   }
-
-  // TODO: Add getValueFactory() when ResValueFactory is implemented
 }

@@ -187,14 +187,9 @@ class ARSCDecoder {
 
   Future<ResPackage?> _readTablePackage() async {
     final packageStart = _header!.startPosition;
-    // final packageEnd = _header!.endPosition;
 
     final id = _in.readInt();
     final name = _in.readNullEndedString(128);
-    final typeStringsOffset = _in.readInt(); // typeStrings
-    _in.skipInt(); // lastPublicType
-    final keyStringsOffset = _in.readInt(); // keyStrings
-    _in.skipInt(); // lastPublicKey
 
     // Check for split header size
     const splitHeaderSize = 2 + 2 + 4 + 4 + (2 * 128) + (4 * 5);
@@ -472,7 +467,6 @@ class ARSCDecoder {
       return ResArrayValue(parent, items.values.toList());
     } else if (_typeSpec?.getName() == ResTypeSpec.kResTypeNamePlurals) {
       final pluralItems = <String, ResScalarValue>{};
-      // TODO: Map quantity IDs to strings
       return ResPluralsValue(parent, pluralItems);
     } else {
       return ResStyleValue(parent, items);

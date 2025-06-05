@@ -1,14 +1,13 @@
 library;
 
 import 'dart:async';
-import 'dart:collection'; // For LinkedHashMap, LinkedHashSet
+import 'dart:collection';
 import 'dart:io' as dart_io;
 
 import 'directory.dart';
 import 'directory_exception.dart';
 import 'path_not_exist.dart';
 import 'path_already_exists.dart';
-// import 'dir_utils.dart'; // TODO: Port DirUtils
 
 abstract class AbstractDirectoryBase implements Directory {
   // These are now initialized by calling abstract methods implemented by subclasses.
@@ -204,25 +203,21 @@ abstract class AbstractDirectoryBase implements Directory {
   // --- copyToDir methods are omitted for now, requires DirUtils port ---
   @override
   Future<void> copyToDir(Directory out) async {
-    // TODO: Implement using ported DirUtils or direct logic
     throw UnimplementedError('copyToDir Directory not implemented yet');
   }
 
   @override
   Future<void> copyToDirPaths(Directory out, List<String> fileNames) async {
-    // TODO: Implement using ported DirUtils or direct logic
     throw UnimplementedError('copyToDirPaths Directory not implemented yet');
   }
 
   @override
   Future<void> copyToDirPath(Directory out, String fileName) async {
-    // TODO: Implement using ported DirUtils or direct logic
     throw UnimplementedError('copyToDirPath Directory not implemented yet');
   }
 
   @override
   Future<void> copyToDirFile(dart_io.File out) async {
-    // TODO: Implement using ported DirUtils or direct logic
     throw UnimplementedError('copyToDirFile File not implemented yet');
   }
 
@@ -231,13 +226,11 @@ abstract class AbstractDirectoryBase implements Directory {
     dart_io.File out,
     List<String> fileNames,
   ) async {
-    // TODO: Implement using ported DirUtils or direct logic
     throw UnimplementedError('copyToDirFilePaths File not implemented yet');
   }
 
   @override
   Future<void> copyToDirFilePath(dart_io.File out, String fileName) async {
-    // TODO: Implement using ported DirUtils or direct logic
     throw UnimplementedError('copyToDirFilePath File not implemented yet');
   }
   // --- End of copyToDir methods ---

@@ -134,7 +134,6 @@ class ResTable {
   ResPackage getPackageById(int id) {
     var pkg = _packagesById[id];
     if (pkg == null) {
-      // TODO: Try loading library or framework package
       throw Exception('Undefined package: id=$id');
     }
     return pkg;

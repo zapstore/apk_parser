@@ -43,7 +43,6 @@ class BytesInputStream extends AbstractInputStream {
     ); // Filter out empty chunks if stream logic implies it
   }
 
-  @override
   Future<int> readByte() async {
     if (_closed || _position >= _data.length) return -1; // EOF
     return _data[_position++];
@@ -51,8 +50,9 @@ class BytesInputStream extends AbstractInputStream {
 
   @override
   Future<int> read(Uint8List buffer, int offset, int length) async {
-    if (_closed)
+    if (_closed) {
       return -1; // Or throw an exception if reading from a closed stream is an error
+    }
     if (offset < 0 || length < 0 || offset + length > buffer.length) {
       throw ArgumentError('Invalid offset or length for read buffer');
     }
@@ -69,11 +69,11 @@ class BytesInputStream extends AbstractInputStream {
     return bytesToRead;
   }
 
-  @override
   Future<List<int>> readNBytes(int n) async {
     if (_closed) return Uint8List(0); // Or throw
-    if (n < 0)
+    if (n < 0) {
       throw ArgumentError("Number of bytes to read cannot be negative.");
+    }
     if (n == 0) return Uint8List(0);
 
     final bytesToEnd = _data.length - _position;
@@ -86,7 +86,6 @@ class BytesInputStream extends AbstractInputStream {
     return result;
   }
 
-  @override
   Future<int> available() async {
     if (_closed) return 0;
     return _data.length - _position;
@@ -181,10 +180,10 @@ class ZipRODirectory extends AbstractDirectoryBase {
   Future<void> _doInitialize() async {
     try {
       if (_zipFilePath != null && _zipData == null) {
-        final file = File(_zipFilePath!);
+        final file = File(_zipFilePath);
         if (!await file.exists()) {
           throw PathNotExistException(
-            _zipFilePath!,
+            _zipFilePath,
             "ZIP file not found at $_zipFilePath",
           );
         }
@@ -195,9 +194,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
         throw StateError("ZipRODirectory has no data source.");
       }
 
-      if (_allEntries == null) {
-        _allEntries = await _parseCentralDirectory(_zipData!);
-      }
+      _allEntries ??= await _parseCentralDirectory(_zipData!);
 
       _populateFilesAndDirs();
       _isInitialized = true;
@@ -210,8 +207,8 @@ class ZipRODirectory extends AbstractDirectoryBase {
   void _populateFilesAndDirs() {
     if (_allEntries == null || _zipData == null) return;
     // Clear ZipRODirectory's own collections
-    this._files.clear();
-    this._dirs.clear();
+    _files.clear();
+    _dirs.clear();
 
     final Set<String> addedSubDirNames = {};
 
@@ -238,17 +235,17 @@ class ZipRODirectory extends AbstractDirectoryBase {
       if (separatorIndex == -1) {
         // Potential file in the current directory
         if (!entry.isDirectory && relativeName.isNotEmpty) {
-          this._files.add(relativeName);
+          _files.add(relativeName);
         }
       } else {
         // Item in a subdirectory or a subdirectory itself
         String dirName = relativeName.substring(0, separatorIndex);
         if (dirName.isNotEmpty && !addedSubDirNames.contains(dirName)) {
-          this._dirs[dirName] =
+          _dirs[dirName] =
               ZipRODirectory._fromSharedData(
                     _zipData!,
                     _allEntries!,
-                    _pathInZip + dirName + '/',
+                    '$_pathInZip$dirName/',
                   )
                   as AbstractDirectoryBase;
           addedSubDirNames.add(dirName);
@@ -490,7 +487,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
       );
       if (_allEntries != null && _zipData != null) _populateFilesAndDirs();
     }
-    return Set.unmodifiable(this._files);
+    return Set.unmodifiable(_files);
   }
 
   @override
@@ -501,7 +498,7 @@ class ZipRODirectory extends AbstractDirectoryBase {
       );
       if (_allEntries != null && _zipData != null) _populateFilesAndDirs();
     }
-    return Map.unmodifiable(this._dirs);
+    return Map.unmodifiable(_dirs);
   }
 
   @override

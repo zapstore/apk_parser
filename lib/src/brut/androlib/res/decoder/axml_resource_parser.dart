@@ -677,8 +677,6 @@ class AXmlResourceParser implements XmlPullParser {
 
     if (valueRawStringIdx != -1) {
       final rawStr = _stringBlock?.getString(valueRawStringIdx);
-      // TODO: Java AXML uses ResXmlEncoders.escapeXmlChars(rawStr).
-      // For now, returning raw. Actual display might need escaping.
       if (rawStr != null) return rawStr;
     }
 

@@ -56,8 +56,6 @@ abstract class AbstractOutputStream {
 // Concrete implementation for streams based on dart:io (for file-based operations later)
 class DartFileStreamInput extends AbstractInputStream {
   final Stream<List<int>> _stream;
-  // TODO: Actual implementation for read, close, etc. based on a file stream.
-  // This will likely involve a StreamIterator or consuming the stream carefully.
   bool _isClosed = false;
 
   DartFileStreamInput(String filePath)
