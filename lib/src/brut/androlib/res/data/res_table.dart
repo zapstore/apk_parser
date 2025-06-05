@@ -182,7 +182,6 @@ class ResTable {
       try {
         pkg = getPackageById(packageId);
       } catch (e) {
-        // Unknown package
         return null;
       }
 
@@ -195,7 +194,6 @@ class ResTable {
         final result = '@${typeSpec.getName()}/${spec.getName()}';
         return result;
       } catch (e) {
-        // Resource not found in package
         return null;
       }
     } catch (e) {
