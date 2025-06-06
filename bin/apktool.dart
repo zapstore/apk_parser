@@ -37,7 +37,7 @@ void main(List<String> args) async {
   try {
     final parser = ApkParser();
 
-    // Fast analysis - returns all essential info as JSON
+    // Fast analysis - returns ApkAnalysis object
     final result = await parser.analyzeApk(
       apkPath,
       requiredArchitecture: requiredArch,
@@ -50,7 +50,7 @@ void main(List<String> args) async {
 
     // Export icon if requested
     if (exportIconPath != null) {
-      final iconBase64 = result['iconBase64'] as String?;
+      final iconBase64 = result.iconBase64;
       if (iconBase64 != null) {
         try {
           final iconBytes = base64Decode(iconBase64);
@@ -64,8 +64,22 @@ void main(List<String> args) async {
       }
     }
 
+    // Convert ApkAnalysis to Map for JSON output
+    final jsonMap = {
+      'package': result.package,
+      'appName': result.appName,
+      'versionName': result.versionName,
+      'versionCode': result.versionCode,
+      'minSdkVersion': result.minSdkVersion,
+      'targetSdkVersion': result.targetSdkVersion,
+      'permissions': result.permissions,
+      'architectures': result.architectures,
+      'iconBase64': result.iconBase64,
+      'certificateHashes': result.certificateHashes,
+    };
+
     // Output JSON result
-    final jsonOutput = JsonEncoder.withIndent('  ').convert(result);
+    final jsonOutput = JsonEncoder.withIndent('  ').convert(jsonMap);
     print(jsonOutput);
   } catch (e) {
     print('Error analyzing APK: $e');

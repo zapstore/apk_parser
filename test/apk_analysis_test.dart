@@ -83,39 +83,37 @@ void main() {
           // 3. Compare specific properties
           final comparisons = <String, dynamic>{
             'package': {
-              'analyzeApk': analysisResult['package'],
+              'analyzeApk': analysisResult.package,
               'aapt2': aapt2Data['package'],
-              'match': analysisResult['package'] == aapt2Data['package'],
+              'match': analysisResult.package == aapt2Data['package'],
             },
             'versionName': {
-              'analyzeApk': analysisResult['versionName'],
+              'analyzeApk': analysisResult.versionName,
               'aapt2': aapt2Data['versionName'],
-              'match':
-                  analysisResult['versionName'] == aapt2Data['versionName'],
+              'match': analysisResult.versionName == aapt2Data['versionName'],
             },
             'versionCode': {
-              'analyzeApk': analysisResult['versionCode'],
+              'analyzeApk': analysisResult.versionCode,
               'aapt2': aapt2Data['versionCode'],
-              'match':
-                  analysisResult['versionCode'] == aapt2Data['versionCode'],
+              'match': analysisResult.versionCode == aapt2Data['versionCode'],
             },
             'minSdkVersion': {
-              'analyzeApk': analysisResult['minSdkVersion'],
+              'analyzeApk': analysisResult.minSdkVersion,
               'aapt2': aapt2Data['minSdkVersion'],
               'match':
-                  analysisResult['minSdkVersion'] == aapt2Data['minSdkVersion'],
+                  analysisResult.minSdkVersion == aapt2Data['minSdkVersion'],
             },
             'targetSdkVersion': {
-              'analyzeApk': analysisResult['targetSdkVersion'],
+              'analyzeApk': analysisResult.targetSdkVersion,
               'aapt2': aapt2Data['targetSdkVersion'],
               'match':
-                  analysisResult['targetSdkVersion'] ==
+                  analysisResult.targetSdkVersion ==
                   aapt2Data['targetSdkVersion'],
             },
             'appName': {
-              'analyzeApk': analysisResult['appName'],
+              'analyzeApk': analysisResult.appName,
               'aapt2': aapt2Data['appName'],
-              'match': analysisResult['appName'] == aapt2Data['appName'],
+              'match': analysisResult.appName == aapt2Data['appName'],
             },
           };
 
@@ -211,18 +209,8 @@ void main() {
       }
     });
 
-    test('analyzeApk returns valid JSON structure for all APKs', () async {
+    test('analyzeApk returns valid structure for all APKs', () async {
       final decoder = ApkParser();
-      final requiredFields = [
-        'package',
-        'appName',
-        'versionName',
-        'versionCode',
-        'minSdkVersion',
-        'targetSdkVersion',
-        'permissions',
-        'architectures',
-      ];
 
       for (final apkFile in apkFiles) {
         final apkName = p.basename(apkFile.path);
@@ -232,50 +220,77 @@ void main() {
 
           // In some test cases, we might get null due to architecture mismatch
           if (result == null) {
-            print(
-              '  ⚠️ Skipping JSON structure test for $apkName (arch mismatch)',
-            );
+            print('  ⚠️ Skipping structure test for $apkName (arch mismatch)');
             continue;
           }
 
-          // Verify all required fields are present
-          for (final field in requiredFields) {
-            expect(
-              result.containsKey(field),
-              isTrue,
-              reason: '$apkName should contain $field in analysis result',
-            );
-            expect(
-              result[field],
-              isNotNull,
-              reason: '$field should not be null for $apkName',
-            );
-          }
+          // Verify all required fields are present and non-null
+          expect(
+            result.package,
+            isNotNull,
+            reason: 'package should not be null for $apkName',
+          );
+          expect(
+            result.appName,
+            isNotNull,
+            reason: 'appName should not be null for $apkName',
+          );
+          expect(
+            result.versionName,
+            isNotNull,
+            reason: 'versionName should not be null for $apkName',
+          );
+          expect(
+            result.versionCode,
+            isNotNull,
+            reason: 'versionCode should not be null for $apkName',
+          );
+          expect(
+            result.minSdkVersion,
+            isNotNull,
+            reason: 'minSdkVersion should not be null for $apkName',
+          );
+          expect(
+            result.targetSdkVersion,
+            isNotNull,
+            reason: 'targetSdkVersion should not be null for $apkName',
+          );
+          expect(
+            result.permissions,
+            isNotNull,
+            reason: 'permissions should not be null for $apkName',
+          );
+          expect(
+            result.architectures,
+            isNotNull,
+            reason: 'architectures should not be null for $apkName',
+          );
 
           // Verify specific field types
           expect(
-            result['permissions'],
-            isA<List>(),
+            result.permissions,
+            isA<List<String>>(),
             reason: 'permissions should be a list for $apkName',
           );
           expect(
-            result['architectures'],
-            isA<List>(),
+            result.architectures,
+            isA<List<String>>(),
             reason: 'architectures should be a list for $apkName',
           );
           expect(
-            result['package'],
+            result.package,
             isA<String>(),
             reason: 'package should be a string for $apkName',
           );
           expect(
-            result['appName'],
+            result.appName,
             isA<String>(),
             reason: 'appName should be a string for $apkName',
           );
 
-          print('✅ $apkName: Valid JSON structure');
+          print('✅ $apkName: Valid structure');
         } catch (e) {
+          print('❌ $apkName: Analysis failed: $e');
           fail('Failed to analyze $apkName: $e');
         }
       }
@@ -284,19 +299,17 @@ void main() {
     test('analyzeApk handles architecture filtering correctly', () async {
       final decoder = ApkParser();
       File? multiArchApk;
-      List<dynamic>? supportedArches;
+      List<String>? supportedArches;
 
       // Find the first APK that has at least one architecture, without relying on filename
       for (final apkFile in apkFiles) {
         final result = await decoder.analyzeApk(apkFile.path);
-        if (result != null &&
-            result.containsKey('architectures') &&
-            (result['architectures'] as List).isNotEmpty) {
+        if (result != null && result.architectures.isNotEmpty) {
           // Found an APK with architectures, but we need to check it's not the default
-          final arches = result['architectures'] as List;
-          if (arches.length > 1 || arches.first != 'arm64-v8a') {
+          if (result.architectures.length > 1 ||
+              result.architectures.first != 'arm64-v8a') {
             multiArchApk = apkFile;
-            supportedArches = result['architectures'] as List;
+            supportedArches = result.architectures;
             break;
           }
         }
@@ -314,7 +327,7 @@ void main() {
       print('  Supported architectures: $supportedArches');
 
       // We already know from the loop that supportedArches is not null or empty.
-      final firstArch = supportedArches!.first as String;
+      final firstArch = supportedArches!.first;
 
       // 2. Analyze with a matching architecture
       final result2 = await decoder.analyzeApk(
@@ -322,7 +335,7 @@ void main() {
         requiredArchitecture: firstArch,
       );
       expect(result2, isNotNull);
-      expect(result2?['package'], isNotNull);
+      expect(result2?.package, isNotNull);
       print('  ✅ Correctly returned data for matching arch: $firstArch');
 
       // 3. Analyze with a non-matching architecture
@@ -396,7 +409,7 @@ void main() {
             continue;
           }
 
-          final iconBase64 = result['iconBase64'] as String?;
+          final iconBase64 = result.iconBase64;
 
           if (iconBase64 != null && iconBase64.isNotEmpty) {
             // Create a temporary file for the icon

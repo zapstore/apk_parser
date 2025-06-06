@@ -17,6 +17,33 @@ import 'res/decoder/manifest_xml_serializer.dart';
 import 'res/data/value/res_value.dart';
 import 'package:image/image.dart' as img;
 
+/// Represents the analysis results of an APK file
+class ApkAnalysis {
+  final String package;
+  final String appName;
+  final String versionName;
+  final String versionCode;
+  final String minSdkVersion;
+  final String targetSdkVersion;
+  final List<String> permissions;
+  final List<String> architectures;
+  final String? iconBase64;
+  final List<String> certificateHashes;
+
+  ApkAnalysis({
+    required this.package,
+    required this.appName,
+    required this.versionName,
+    required this.versionCode,
+    required this.minSdkVersion,
+    required this.targetSdkVersion,
+    required this.permissions,
+    required this.architectures,
+    this.iconBase64,
+    required this.certificateHashes,
+  });
+}
+
 class ApkParser {
   Future<ResTable> _getResTable(String apkPath) async {
     // Always create a fresh ResTable to avoid caching issues
@@ -211,8 +238,8 @@ class ApkParser {
     return path;
   }
 
-  /// Fast APK analysis that returns essential information as JSON
-  Future<Map<String, dynamic>?> analyzeApk(
+  /// Fast APK analysis that returns essential information
+  Future<ApkAnalysis?> analyzeApk(
     String apkPath, {
     String? requiredArchitecture,
   }) async {
@@ -237,16 +264,16 @@ class ApkParser {
       final manifestElement = manifestDoc.rootElement;
 
       // Extract basic app info
-      final packageId = manifestElement.getAttribute('package');
+      final packageId = manifestElement.getAttribute('package') ?? '';
 
       String? versionName = manifestElement.getAttribute('versionName');
       if (versionName == null || versionName.isEmpty) {
-        versionName = manifestElement.getAttribute('android:versionName');
+        versionName = manifestElement.getAttribute('android:versionName') ?? '';
       }
 
       String? versionCode = manifestElement.getAttribute('versionCode');
       if (versionCode == null || versionCode.isEmpty) {
-        versionCode = manifestElement.getAttribute('android:versionCode');
+        versionCode = manifestElement.getAttribute('android:versionCode') ?? '';
       }
 
       // Extract SDK versions
@@ -256,16 +283,16 @@ class ApkParser {
 
       String? minSdkVersion = usesSdkElement?.getAttribute('minSdkVersion');
       if (minSdkVersion == null || minSdkVersion.isEmpty) {
-        minSdkVersion = usesSdkElement?.getAttribute('android:minSdkVersion');
+        minSdkVersion =
+            usesSdkElement?.getAttribute('android:minSdkVersion') ?? '';
       }
 
       String? targetSdkVersion = usesSdkElement?.getAttribute(
         'targetSdkVersion',
       );
       if (targetSdkVersion == null || targetSdkVersion.isEmpty) {
-        targetSdkVersion = usesSdkElement?.getAttribute(
-          'android:targetSdkVersion',
-        );
+        targetSdkVersion =
+            usesSdkElement?.getAttribute('android:targetSdkVersion') ?? '';
       }
 
       // Extract permissions
@@ -331,23 +358,19 @@ class ApkParser {
         // Continue without certificate hashes
       }
 
-      // 7. Build result JSON
-      final result = {
-        'package': packageId,
-        'appName': appName,
-        'versionName': versionName,
-        'versionCode': versionCode,
-        'minSdkVersion': minSdkVersion,
-        'targetSdkVersion': targetSdkVersion,
-        'permissions': permissions,
-        'architectures': architectures.toList(),
-        'iconBase64': iconBase64,
-        'certificateHashes': certificateHashes.toList(),
-      };
-
-      return result;
+      return ApkAnalysis(
+        package: packageId,
+        appName: appName,
+        versionName: versionName,
+        versionCode: versionCode,
+        minSdkVersion: minSdkVersion,
+        targetSdkVersion: targetSdkVersion,
+        permissions: permissions,
+        architectures: architectures.toList(),
+        iconBase64: iconBase64,
+        certificateHashes: certificateHashes.toList(),
+      );
     } catch (e) {
-      // print('❌ Analysis failed: $e');
       rethrow;
     }
   }
