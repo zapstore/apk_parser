@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:apktool_dart/src/androlib/apk_decoder.dart';
+import 'package:apk_parser/src/androlib/apk_decoder.dart';
 import 'package:args/args.dart';
 
 void main(List<String> args) async {

@@ -10,8 +10,8 @@ import 'abstract_directory.dart'; // Provides AbstractDirectoryBase
 import 'directory.dart'; // Provides Directory, AbstractInputStream, AbstractOutputStream
 // Assuming PathNotExistException and BytesInputStream are available/defined elsewhere
 // For example:
-// import 'package:apktool_dart/src/brut/directory/directory_exception.dart'; // For PathNotExistException
-// import 'package:apktool_dart/src/brut/io/bytes_input_stream.dart'; // For BytesInputStream
+// import 'package:apk_parser/src/brut/directory/directory_exception.dart'; // For PathNotExistException
+// import 'package:apk_parser/src/brut/io/bytes_input_stream.dart'; // For BytesInputStream
 
 // Placeholder for BytesInputStream - actual implementation should be in its own file.
 // This is just to make the code below more concrete.

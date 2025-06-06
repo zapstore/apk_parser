@@ -26,7 +26,7 @@ The library successfully decodes AndroidManifest.xml files and resolves resource
 ## Usage
 
 ```dart
-import 'package:apktool_dart/src/brut/androlib/apk_decoder.dart';
+import 'package:apk_parser/src/brut/androlib/apk_decoder.dart';
 
 final decoder = ApkDecoder();
 

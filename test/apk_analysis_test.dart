@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
-import 'package:apktool_dart/src/androlib/apk_decoder.dart';
+import 'package:apk_parser/src/androlib/apk_decoder.dart';
 
 void main() {
   group('APK Analysis Tests', () {

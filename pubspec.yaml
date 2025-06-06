@@ -1,7 +1,7 @@
-name: apktool_dart
+name: apk_parser
 description: A Dart port of apktool
 version: 0.1.0
-repository: https://github.com/zapstore/apktool_dart
+repository: https://github.com/zapstore/apk_parser
 
 environment:
   sdk: ^3.8.1
