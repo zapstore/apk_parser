@@ -4,7 +4,7 @@ import 'dart:async';
 // For htmlEscape if needed, though XmlElement handles it.
 
 import 'package:xml/xml.dart' as xml_pkg;
-import 'package:apktool_dart/src/brut/xmlpull/xml_pull_parser.dart';
+import 'package:apktool_dart/src/xmlpull/xml_pull_parser.dart';
 
 // Assuming AXmlResourceParser is correctly imported from its location
 import 'axml_resource_parser.dart';

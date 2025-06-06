@@ -3,8 +3,8 @@ library;
 import 'dart:convert'; // For Utf8Decoder, Utf16leDecoder (not directly available, use utf8, implement manual utf16le)
 import 'dart:typed_data';
 
-import 'package:apktool_dart/src/brut/common/brut_exception.dart';
-import 'package:apktool_dart/src/brut/util/ext_data_input.dart';
+import 'package:apktool_dart/src/common/brut_exception.dart';
+import 'package:apktool_dart/src/util/ext_data_input.dart';
 
 const int _resStringPoolType = 0x0001;
 

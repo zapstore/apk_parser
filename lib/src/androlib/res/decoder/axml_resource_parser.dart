@@ -3,11 +3,11 @@ library;
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:apktool_dart/src/brut/common/brut_exception.dart'; // For AndrolibException placeholder
-import 'package:apktool_dart/src/brut/util/ext_data_input.dart';
-import 'package:apktool_dart/src/brut/util/ext_data_input_stream.dart';
-import 'package:apktool_dart/src/brut/xmlpull/xml_pull_parser.dart';
-import 'package:apktool_dart/src/brut/xmlpull/xml_pull_parser_exception.dart';
+import 'package:apktool_dart/src/common/brut_exception.dart'; // For AndrolibException placeholder
+import 'package:apktool_dart/src/util/ext_data_input.dart';
+import 'package:apktool_dart/src/util/ext_data_input_stream.dart';
+import 'package:apktool_dart/src/xmlpull/xml_pull_parser.dart';
+import 'package:apktool_dart/src/xmlpull/xml_pull_parser_exception.dart';
 
 import '../data/arsc/arsc_header.dart';
 import '../data/axml/namespace_stack.dart';

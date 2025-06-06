@@ -1,11 +1,11 @@
 library;
 
 // Export main decoder class
-export 'src/brut/androlib/apk_decoder.dart' show ApkDecoder;
+export 'src/androlib/apk_decoder.dart' show ApkDecoder;
 
 // Export exceptions that users might need to handle
-export 'src/brut/common/brut_exception.dart' show BrutException;
-export 'src/brut/directory/directory_exception.dart' show DirectoryException;
+export 'src/common/brut_exception.dart' show BrutException;
+export 'src/directory/directory_exception.dart' show DirectoryException;
 
 /// Decodes the given APK file into the output directory.
 ///

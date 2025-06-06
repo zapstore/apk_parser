@@ -7,7 +7,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart' as xml;
-import 'package:apktool_dart/src/brut/androlib/icon_renderer.dart';
 import '../util/signature_parser.dart';
 
 import '../directory/directory.dart';
@@ -417,7 +416,7 @@ class ApkDecoder {
 
       // Fallback: Try to find any suitable icon file directly in APK
       return await _tryDirectIconExtraction(apkPath, iconRef);
-    } catch (e, stackTrace) {
+    } catch (e) {
       print('⚠️  Icon processing failed: $e');
       return null;
     }
@@ -913,10 +912,8 @@ class ApkDecoder {
 
         String? bestPath;
         int bestDensity = 0;
-        int resourceCount = 0;
 
         for (final resource in drawableSpec.listResources()) {
-          resourceCount++;
           final value = resource.getValue();
           if (value is ResFileValue) {
             final filePath = value.toString();

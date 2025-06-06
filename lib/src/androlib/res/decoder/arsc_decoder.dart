@@ -1,6 +1,6 @@
 library;
 
-import 'package:apktool_dart/src/brut/util/ext_data_input.dart';
+import 'package:apktool_dart/src/util/ext_data_input.dart';
 import '../data/arsc/arsc_header.dart';
 import '../data/res_table.dart';
 import '../data/res_package.dart';

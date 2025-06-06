@@ -2,7 +2,7 @@ library;
 
 import 'dart:convert'; // For utf8
 import 'dart:typed_data';
-import 'package:apktool_dart/src/brut/util/ext_data_input.dart';
+import 'package:apktool_dart/src/util/ext_data_input.dart';
 import '../common/brut_exception.dart'; // For potential exceptions
 import '../directory/apktool_io_exception.dart'; // For IO related exceptions
 
