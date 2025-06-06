@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:apk_parser/src/androlib/apk_decoder.dart';
+import 'package:apk_parser/src/androlib/apk_parser.dart';
 import 'package:args/args.dart';
 
 void main(List<String> args) async {
-  final parser = ArgParser()
+  final argParser = ArgParser()
     ..addOption(
       'arch',
       abbr: 'a',
@@ -15,11 +15,11 @@ void main(List<String> args) async {
       help: 'Export app icon to specified file path (e.g., icon.png)',
     );
 
-  final argResults = parser.parse(args);
+  final argResults = argParser.parse(args);
   final rest = argResults.rest;
 
   if (rest.isEmpty) {
-    printUsage(parser);
+    printUsage(argParser);
     exit(1);
   }
 
@@ -35,10 +35,10 @@ void main(List<String> args) async {
   }
 
   try {
-    final decoder = ApkDecoder();
+    final parser = ApkParser();
 
     // Fast analysis - returns all essential info as JSON
-    final result = await decoder.analyzeApk(
+    final result = await parser.analyzeApk(
       apkPath,
       requiredArchitecture: requiredArch,
     );
@@ -73,7 +73,7 @@ void main(List<String> args) async {
   }
 }
 
-void printUsage(ArgParser parser) {
+void printUsage(ArgParser args) {
   print('Apktool Dart - Fast APK Analyzer');
   print('');
   print('Usage: dart run apktool.dart [options] <apk_file>');
@@ -82,7 +82,7 @@ void printUsage(ArgParser parser) {
   print('  <apk_file>      Path to the APK file to analyze');
   print('');
   print('Options:');
-  print(parser.usage);
+  print(args.usage);
   print('');
   print('Output:');
   print('  JSON containing:');

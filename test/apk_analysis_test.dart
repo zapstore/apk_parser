@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:path/path.dart' as p;
-import 'package:apk_parser/src/androlib/apk_decoder.dart';
+import 'package:apk_parser/src/androlib/apk_parser.dart';
 
 void main() {
   group('APK Analysis Tests', () {
@@ -44,7 +44,7 @@ void main() {
     });
 
     test('analyzeApk output matches aapt2 dump badging for all APKs', () async {
-      final decoder = ApkDecoder();
+      final decoder = ApkParser();
       final results = <String, Map<String, dynamic>>{};
       var successCount = 0;
       var totalComparisons = 0;
@@ -212,7 +212,7 @@ void main() {
     });
 
     test('analyzeApk returns valid JSON structure for all APKs', () async {
-      final decoder = ApkDecoder();
+      final decoder = ApkParser();
       final requiredFields = [
         'package',
         'appName',
@@ -282,7 +282,7 @@ void main() {
     });
 
     test('analyzeApk handles architecture filtering correctly', () async {
-      final decoder = ApkDecoder();
+      final decoder = ApkParser();
       File? multiArchApk;
       List<dynamic>? supportedArches;
 
@@ -338,7 +338,7 @@ void main() {
     });
 
     test('manifest decoding works for all APKs', () async {
-      final decoder = ApkDecoder();
+      final decoder = ApkParser();
       var successCount = 0;
 
       for (final apkFile in apkFiles) {
@@ -379,7 +379,7 @@ void main() {
     });
 
     test('icon export functionality works correctly', () async {
-      final decoder = ApkDecoder();
+      final decoder = ApkParser();
       var iconsExported = 0;
 
       for (final apkFile in apkFiles) {

@@ -17,13 +17,7 @@ import 'res/decoder/manifest_xml_serializer.dart';
 import 'res/data/value/res_value.dart';
 import 'package:image/image.dart' as img;
 
-// Placeholder for AndrolibException if not already defined broadly
-// Assuming it's in common or defined as previously.
-// For now, let's ensure it's available for AXmlResourceParser
-
-class ApkDecoder {
-  ApkDecoder();
-
+class ApkParser {
   Future<ResTable> _getResTable(String apkPath) async {
     // Always create a fresh ResTable to avoid caching issues
     final resTable = ResTable();
@@ -218,7 +212,6 @@ class ApkDecoder {
   }
 
   /// Fast APK analysis that returns essential information as JSON
-  /// without writing files to disk (except temporary icon processing)
   Future<Map<String, dynamic>?> analyzeApk(
     String apkPath, {
     String? requiredArchitecture,

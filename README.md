@@ -39,26 +39,26 @@ This library takes Android APK files as input and provides comprehensive analysi
 ## Usage
 
 ```dart
-import 'package:apk_parser/src/androlib/apk_decoder.dart';
+import 'package:apk_parser/src/androlib/apk_parser.dart';
 
-final decoder = ApkDecoder();
+final parser = ApkParser();
 
 // Analyze APK and get JSON output
-final analysis = await decoder.analyzeApk('path/to/app.apk');
+final analysis = await parser.analyzeApk('path/to/app.apk');
 print(analysis);
 
 // Analyze with architecture filter
-final arm64Analysis = await decoder.analyzeApk(
+final arm64Analysis = await parser.analyzeApk(
   'path/to/app.apk',
   requiredArchitecture: 'arm64-v8a',
 );
 
 // Decode just the manifest
-final manifestXml = await decoder.decodeManifestToXmlText('path/to/app.apk');
+final manifestXml = await parser.decodeManifestToXmlText('path/to/app.apk');
 print(manifestXml);
 
 // Full decode with resource extraction
-await decoder.decode('path/to/app.apk', 'output/directory');
+await parser.decode('path/to/app.apk', 'output/directory');
 ```
 
 ### Command Line Interface

@@ -1,7 +1,6 @@
 library;
 
-// Export main decoder class
-export 'src/androlib/apk_decoder.dart' show ApkDecoder;
+export 'src/androlib/apk_parser.dart' show ApkParser;
 
 // Export exceptions that users might need to handle
 export 'src/common/brut_exception.dart' show BrutException;
