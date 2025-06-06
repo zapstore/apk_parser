@@ -42,6 +42,20 @@ class ApkAnalysis {
     this.iconBase64,
     required this.certificateHashes,
   });
+  Map<String, dynamic> toMap() {
+    return {
+      'package': package,
+      'appName': appName,
+      'versionName': versionName,
+      'versionCode': versionCode,
+      'minSdkVersion': minSdkVersion,
+      'targetSdkVersion': targetSdkVersion,
+      'permissions': permissions,
+      'architectures': architectures,
+      'iconBase64': iconBase64,
+      'certificateHashes': certificateHashes,
+    };
+  }
 }
 
 class ApkParser {
