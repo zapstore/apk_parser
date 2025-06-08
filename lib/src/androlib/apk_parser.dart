@@ -20,7 +20,7 @@ import 'package:image/image.dart' as img;
 /// Represents the analysis results of an APK file
 class ApkAnalysis {
   final String package;
-  final String appName;
+  final String? appName;
   final String versionName;
   final String versionCode;
   final String minSdkVersion;
@@ -332,7 +332,7 @@ class ApkParser {
       final resTable = await _getResTable(apkPath);
 
       // 4. Get app name from string resources
-      String? appName = packageId; // Fallback to package ID
+      String? appName;
       final appLabelRef =
           applicationElement?.getAttribute('android:label') ??
           applicationElement?.getAttribute('label');
@@ -353,7 +353,7 @@ class ApkParser {
 
         // Recursively resolve string references
         if (resolvedRef != null) {
-          appName = _resolveStringResource(resTable, resolvedRef) ?? packageId;
+          appName = _resolveStringResource(resTable, resolvedRef);
         }
       }
 
@@ -444,8 +444,7 @@ class ApkParser {
         }
       }
 
-      // Fallback: Try to find any suitable icon file directly in APK
-      return await _tryDirectIconExtraction(apkPath, iconRef);
+      return null;
     } catch (e) {
       print('⚠️  Icon processing failed: $e');
       return null;
@@ -712,99 +711,6 @@ class ApkParser {
 
     // Unknown reference type or resolution failed
     return null;
-  }
-
-  /// Try to extract icon directly from APK by looking for common icon files
-  Future<String?> _tryDirectIconExtraction(
-    String apkPath,
-    String iconRef,
-  ) async {
-    try {
-      final apkFile = ExtFile(apkPath);
-      Directory? apkDirectory;
-
-      try {
-        apkDirectory = await apkFile.getDirectory();
-        final files = await apkDirectory.getFiles(recursive: true);
-
-        // Look for potential icon files
-        final iconCandidates = <String>[];
-        for (final fileName in files) {
-          // Look for common icon patterns
-          if (fileName.contains('ic_launcher') ||
-              fileName.contains('icon') ||
-              fileName.endsWith('.png') ||
-              fileName.endsWith('.webp') ||
-              fileName.endsWith('.jpg') ||
-              fileName.endsWith('.jpeg')) {
-            iconCandidates.add(fileName);
-          }
-        }
-
-        // Try to find the best icon candidate
-        String? bestIcon;
-
-        // Priority 1: Files with ic_launcher in the name
-        for (final candidate in iconCandidates) {
-          if (candidate.contains('ic_launcher') &&
-              (candidate.endsWith('.png') || candidate.endsWith('.webp'))) {
-            bestIcon = candidate;
-            break;
-          }
-        }
-
-        // Priority 2: Any PNG/WebP with icon in the name
-        if (bestIcon == null) {
-          for (final candidate in iconCandidates) {
-            if (candidate.contains('icon') &&
-                (candidate.endsWith('.png') || candidate.endsWith('.webp'))) {
-              bestIcon = candidate;
-              break;
-            }
-          }
-        }
-
-        // Priority 3: Any PNG/WebP file
-        if (bestIcon == null) {
-          for (final candidate in iconCandidates) {
-            if (candidate.endsWith('.png') || candidate.endsWith('.webp')) {
-              bestIcon = candidate;
-              break;
-            }
-          }
-        }
-
-        if (bestIcon != null) {
-          // Extract the icon file
-          final iconStream = await apkDirectory.getFileInput(bestIcon);
-          final iconBytes = <int>[];
-
-          await for (final chunk in iconStream.asStream()) {
-            iconBytes.addAll(chunk);
-          }
-          await iconStream.close();
-
-          if (iconBytes.isNotEmpty) {
-            // Convert to PNG if needed and resize
-            final processedIcon = await _processIconBytes(
-              Uint8List.fromList(iconBytes),
-              bestIcon,
-            );
-            if (processedIcon != null) {
-              final base64Icon = base64Encode(processedIcon);
-              return base64Icon;
-            }
-          }
-        }
-      } finally {
-        await apkDirectory?.close();
-        await apkFile.close();
-      }
-
-      return null;
-    } catch (e) {
-      return null;
-    }
   }
 
   /// Extract icon from adaptive icon XML by parsing the XML and resolving drawable references
