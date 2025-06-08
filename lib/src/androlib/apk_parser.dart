@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart' as xml;
 import '../util/signature_parser.dart';
+import '../util/file_type_detector.dart';
 
 import '../directory/directory.dart';
 import '../directory/ext_file.dart';
@@ -155,29 +156,30 @@ class ApkParser {
           // Create parent directories
           await outputFile.parent.create(recursive: true);
 
-          // Check file extension
-          final ext = p.extension(fileName).toLowerCase();
+          // Check file type using magic bytes
+          final fileBytes = await _peekFileBytes(apkDirectory, fileName);
+          if (fileBytes != null) {
+            if (FileTypeDetector.isXml(fileBytes)) {
+              // Try to decode binary XML files
+              try {
+                final xmlStream = await apkDirectory.getFileInput(fileName);
+                final xmlParser = AXmlResourceParser(resTable);
+                await xmlParser.setInput(xmlStream.asStream(), null);
 
-          if (ext == '.xml') {
-            // Try to decode binary XML files
-            try {
-              final xmlStream = await apkDirectory.getFileInput(fileName);
-              final xmlParser = AXmlResourceParser(resTable);
-              await xmlParser.setInput(xmlStream.asStream(), null);
+                final serializer = ManifestXmlSerializer(xmlParser);
+                final xmlText = await serializer.buildXmlDocumentToString();
 
-              final serializer = ManifestXmlSerializer(xmlParser);
-              final xmlText = await serializer.buildXmlDocumentToString();
-
-              await outputFile.writeAsString(xmlText);
-              await xmlStream.close();
-              await xmlParser.close();
-            } catch (e) {
-              // If XML decoding fails, copy as binary
+                await outputFile.writeAsString(xmlText);
+                await xmlStream.close();
+                await xmlParser.close();
+              } catch (e) {
+                // If XML decoding fails, copy as binary
+                await _copyBinaryFile(apkDirectory, fileName, outputFile);
+              }
+            } else {
+              // Copy binary files as-is
               await _copyBinaryFile(apkDirectory, fileName, outputFile);
             }
-          } else {
-            // Copy binary files as-is (PNG, JPG, etc.)
-            await _copyBinaryFile(apkDirectory, fileName, outputFile);
           }
         }
       }
@@ -602,23 +604,22 @@ class ApkParser {
     String fileName,
   ) async {
     try {
-      // Try to decode the image
+      // Try to decode the image based on magic bytes
       final img.Image? image;
-      final extension = p.extension(fileName).toLowerCase();
+      final fileType = FileTypeDetector.detectFileType(iconBytes);
 
-      switch (extension) {
-        case '.png':
+      switch (fileType) {
+        case 'png':
           image = img.decodePng(iconBytes);
           break;
-        case '.webp':
+        case 'webp':
           image = img.decodeWebP(iconBytes);
           break;
-        case '.jpg':
-        case '.jpeg':
+        case 'jpeg':
           image = img.decodeJpg(iconBytes);
           break;
         default:
-          image = img.decodeImage(iconBytes);
+          return null; // Not a supported image format
       }
 
       if (image == null) {
@@ -798,6 +799,7 @@ class ApkParser {
           final resolvedPath = await _resolveDrawableToRasterPath(
             resTable,
             drawableRef,
+            apkPath,
           );
           if (resolvedPath != null) {
             return resolvedPath;
@@ -815,6 +817,7 @@ class ApkParser {
   Future<String?> _resolveDrawableToRasterPath(
     ResTable resTable,
     String drawableRef,
+    String apkPath,
   ) async {
     try {
       if (!drawableRef.startsWith('@mipmap/') &&
@@ -853,36 +856,34 @@ class ApkParser {
           final value = resource.getValue();
           if (value is ResFileValue) {
             final filePath = value.toString();
+            final fileBytes = await _extractFileFromApk(apkPath, filePath);
 
-            // Check if it's a raster image format OR a file without extension (might be an image)
-            if (filePath.toLowerCase().endsWith('.png') ||
-                filePath.toLowerCase().endsWith('.webp') ||
-                filePath.toLowerCase().endsWith('.jpg') ||
-                filePath.toLowerCase().endsWith('.jpeg') ||
-                !filePath.contains('.')) {
-              // Files without extensions might be images
+            if (fileBytes != null) {
+              // Check if it's an image using magic bytes
+              final fileType = FileTypeDetector.detectFileType(fileBytes);
+              if (fileType == 'png' ||
+                  fileType == 'jpeg' ||
+                  fileType == 'webp') {
+                final config = resource.getConfig();
+                final qualifiers = config.getFlags().getQualifiers();
 
-              final config = resource.getConfig();
-              final qualifiers = config.getFlags().getQualifiers();
+                int currentDensity = 160; // Default mdpi
+                for (final densityName in densityPriority.keys) {
+                  if (qualifiers.contains('-$densityName')) {
+                    currentDensity = densityPriority[densityName]!;
+                    break;
+                  }
+                }
 
-              int currentDensity = 160; // Default mdpi
-              for (final densityName in densityPriority.keys) {
-                if (qualifiers.contains('-$densityName')) {
-                  currentDensity = densityPriority[densityName]!;
-                  break;
+                if (qualifiers.isEmpty || qualifiers == '') {
+                  currentDensity = densityPriority['']!;
+                }
+
+                if (currentDensity > bestDensity) {
+                  bestDensity = currentDensity;
+                  bestPath = filePath;
                 }
               }
-
-              if (qualifiers.isEmpty || qualifiers == '') {
-                currentDensity = densityPriority['']!;
-              }
-
-              if (currentDensity > bestDensity) {
-                bestDensity = currentDensity;
-                bestPath = filePath;
-              }
-            } else {
-              // Skipping non-raster file: $filePath
             }
           }
         }
@@ -891,6 +892,25 @@ class ApkParser {
       } catch (e) {
         return null;
       }
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Peek at the first few bytes of a file to detect its type
+  Future<Uint8List?> _peekFileBytes(
+    Directory apkDirectory,
+    String fileName,
+  ) async {
+    try {
+      final inputStream = await apkDirectory.getFileInput(fileName);
+      final bytes = <int>[];
+      await for (final chunk in inputStream.asStream()) {
+        bytes.addAll(chunk);
+        if (bytes.length >= 12) break; // We only need up to 12 bytes for WebP
+      }
+      await inputStream.close();
+      return Uint8List.fromList(bytes);
     } catch (e) {
       return null;
     }
